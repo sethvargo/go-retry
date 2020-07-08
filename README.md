@@ -145,7 +145,7 @@ if err != nil {
 
 // Stop when the 5th retry has failed. In this example, the worst case elapsed
 // time would be 1s + 1s + 2s + 3s = 7s.
-b = WithMaxRetires(4, b)
+b = WithMaxRetries(4, b)
 ```
 
 ### CappedDuration

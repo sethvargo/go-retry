@@ -9,7 +9,7 @@ jobs:
     steps:
     - uses: actions/stale@v3
       with:
-        repo-token: '${{ secrets.GITHUB_TOKEN }}'
+        repo-token: '${{ github.token }}'
 
         stale-issue-message: |-
           This issue is stale because it has been open for 14 days with no

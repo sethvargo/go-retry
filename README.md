@@ -109,7 +109,7 @@ Usage:
 NewFibonacci(1 * time.Second)
 ```
 
-## Modifies (Middleware)
+## Modifiers (Middleware)
 
 The built-in backoff algorithms never terminate and have no caps or limits - you
 control their behavior with middleware. There's built-in middleware, but you can

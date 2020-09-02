@@ -175,7 +175,7 @@ if err != nil {
 }
 
 // Ensure the maximum total retry time is 5s.
-b = WithCappedDuration(5 * time.Second, b)
+b = WithMaxDuration(5 * time.Second, b)
 ```
 
 ## Benchmarks

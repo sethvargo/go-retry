@@ -23,6 +23,23 @@ func TestRetryableError(t *testing.T) {
 func TestDo(t *testing.T) {
 	t.Parallel()
 
+	t.Run("unwrapping_error", func(t *testing.T) {
+		t.Parallel()
+
+		b := retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, true
+		})
+		cause := fmt.Errorf("oops")
+
+		ctx := context.Background()
+		err := retry.Do(ctx, retry.WithMaxRetries(1, b), func(_ context.Context) error {
+			return retry.RetryableError(cause)
+		})
+		if err != cause {
+			t.Errorf("expected %v to be %v", err, cause)
+		}
+	})
+
 	t.Run("exit_on_max_attempt", func(t *testing.T) {
 		t.Parallel()
 

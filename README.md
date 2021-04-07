@@ -194,3 +194,6 @@ Benchmark/sethvargo-7    203,914,245     5.73 ns/op
 
 - Randomization uses `math/rand` seeded with the Unix timestamp instead of
   `crypto/rand`.
+- Ordering of addition of multiple modifiers will make a difference.
+  For example; ensure you add `CappedDuration` before `WithMaxDuration`, otherwise it may early out too early.
+  Another example is you could add `Jitter` before or after capping depending on your desired outcome.

@@ -135,8 +135,8 @@ b = WithJitterPercent(5, b)
 
 ### MaxRetries
 
-To terminate a retry, specify the maximum number of _retry_ attempts. Note this
-is _retries_, not _attempts_. Attempts is retries - 1.
+To terminate a retry, specify the maximum number of _retries_. Note this
+is _retries_, not _attempts_. Attempts is retries + 1.
 
 ```golang
 b, err := NewFibonacci(1 * time.Second)
@@ -144,7 +144,7 @@ if err != nil {
   // handle err
 }
 
-// Stop when the 5th retry has failed. In this example, the worst case elapsed
+// Stop after 4 retries, when the 5th attempt has failed. In this example, the worst case elapsed
 // time would be 1s + 1s + 2s + 3s = 7s.
 b = WithMaxRetries(4, b)
 ```

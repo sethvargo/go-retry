@@ -3,6 +3,7 @@ package retry_test
 import (
 	"context"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"testing"
@@ -26,17 +27,16 @@ func TestDo(t *testing.T) {
 	t.Run("exit_on_max_attempt", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
-		})
-
 		ctx := context.Background()
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
 		var i int
-		err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(_ context.Context) error {
+		if err := retry.Do(ctx, b, func(_ context.Context) error {
 			i++
 			return retry.RetryableError(fmt.Errorf("oops"))
-		})
-		if err == nil {
+		}); err == nil {
 			t.Fatal("expected err")
 		}
 
@@ -49,17 +49,16 @@ func TestDo(t *testing.T) {
 	t.Run("exit_on_non_retryable", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
-		})
-
 		ctx := context.Background()
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
 		var i int
-		err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(_ context.Context) error {
+		if err := retry.Do(ctx, b, func(_ context.Context) error {
 			i++
 			return fmt.Errorf("oops") // not retryable
-		})
-		if err == nil {
+		}); err == nil {
 			t.Fatal("expected err")
 		}
 
@@ -68,20 +67,39 @@ func TestDo(t *testing.T) {
 		}
 	})
 
+	t.Run("unwraps", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		b := retry.WithMaxRetries(1, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
+		err := retry.Do(ctx, b, func(_ context.Context) error {
+			return retry.RetryableError(io.EOF)
+		})
+		if err == nil {
+			t.Fatal("expected err")
+		}
+
+		if got, want := err, io.EOF; got != want {
+			t.Errorf("expected %#v to be %#v", got, want)
+		}
+	})
+
 	t.Run("exit_no_error", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
-		})
-
 		ctx := context.Background()
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
 		var i int
-		err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(_ context.Context) error {
+		if err := retry.Do(ctx, b, func(_ context.Context) error {
 			i++
 			return nil // no error
-		})
-		if err != nil {
+		}); err != nil {
 			t.Fatal("expected no err")
 		}
 
@@ -100,10 +118,9 @@ func TestDo(t *testing.T) {
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
 		defer cancel()
 
-		err := retry.Do(ctx, b, func(_ context.Context) error {
+		if err := retry.Do(ctx, b, func(_ context.Context) error {
 			return retry.RetryableError(fmt.Errorf("oops")) // no error
-		})
-		if err != context.DeadlineExceeded {
+		}); err != context.DeadlineExceeded {
 			t.Errorf("expected %v to be %v", err, context.DeadlineExceeded)
 		}
 	})

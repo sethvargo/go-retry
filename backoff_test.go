@@ -1,14 +1,18 @@
-package retry
+package retry_test
 
 import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/sethvargo/go-retry"
 )
 
 func ExampleBackoffFunc() {
+	ctx := context.Background()
+
 	// Example backoff middleware that adds the provided duration t to the result.
-	withShift := func(t time.Duration, next Backoff) BackoffFunc {
+	withShift := func(t time.Duration, next retry.Backoff) retry.BackoffFunc {
 		return func() (time.Duration, bool) {
 			val, stop := next.Next()
 			if stop {
@@ -19,13 +23,10 @@ func ExampleBackoffFunc() {
 	}
 
 	// Middlewrap wrap another backoff:
-	b, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle error
-	}
+	b := retry.NewFibonacci(1 * time.Second)
+	b = withShift(5*time.Second, b)
 
-	ctx := context.Background()
-	if err := Do(ctx, withShift(5*time.Second, b), func(ctx context.Context) error {
+	if err := retry.Do(ctx, b, func(ctx context.Context) error {
 		// Actual retry logic here
 		return nil
 	}); err != nil {
@@ -37,7 +38,7 @@ func TestWithJitter(t *testing.T) {
 	t.Parallel()
 
 	for i := 0; i < 100_000; i++ {
-		b := WithJitter(250*time.Millisecond, BackoffFunc(func() (time.Duration, bool) {
+		b := retry.WithJitter(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
 			return 1 * time.Second, false
 		}))
 		val, stop := b.Next()
@@ -53,23 +54,23 @@ func TestWithJitter(t *testing.T) {
 
 func ExampleWithJitter() {
 	ctx := context.Background()
-	fib, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle err
-	}
 
-	err = Do(ctx, WithJitter(1*time.Second, fib), func(_ context.Context) error {
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithJitter(1*time.Second, b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
 		return nil
-	})
-	_ = err
+	}); err != nil {
+		// handle error
+	}
 }
 
 func TestWithJitterPercent(t *testing.T) {
 	t.Parallel()
 
 	for i := 0; i < 100_000; i++ {
-		b := WithJitterPercent(5, BackoffFunc(func() (time.Duration, bool) {
+		b := retry.WithJitterPercent(5, retry.BackoffFunc(func() (time.Duration, bool) {
 			return 1 * time.Second, false
 		}))
 		val, stop := b.Next()
@@ -85,22 +86,22 @@ func TestWithJitterPercent(t *testing.T) {
 
 func ExampleWithJitterPercent() {
 	ctx := context.Background()
-	fib, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle err
-	}
 
-	err = Do(ctx, WithJitterPercent(5, fib), func(_ context.Context) error {
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithJitterPercent(5, b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
 		return nil
-	})
-	_ = err
+	}); err != nil {
+		// handle error
+	}
 }
 
 func TestWithMaxRetries(t *testing.T) {
 	t.Parallel()
 
-	b := WithMaxRetries(3, BackoffFunc(func() (time.Duration, bool) {
+	b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
 		return 1 * time.Second, false
 	}))
 
@@ -127,22 +128,22 @@ func TestWithMaxRetries(t *testing.T) {
 
 func ExampleWithMaxRetries() {
 	ctx := context.Background()
-	fib, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle err
-	}
 
-	err = Do(ctx, WithMaxRetries(3, fib), func(_ context.Context) error {
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithMaxRetries(3, b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
 		return nil
-	})
-	_ = err
+	}); err != nil {
+		// handle error
+	}
 }
 
 func TestWithCappedDuration(t *testing.T) {
 	t.Parallel()
 
-	b := WithCappedDuration(3*time.Second, BackoffFunc(func() (time.Duration, bool) {
+	b := retry.WithCappedDuration(3*time.Second, retry.BackoffFunc(func() (time.Duration, bool) {
 		return 5 * time.Second, false
 	}))
 
@@ -157,22 +158,22 @@ func TestWithCappedDuration(t *testing.T) {
 
 func ExampleWithCappedDuration() {
 	ctx := context.Background()
-	fib, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle err
-	}
 
-	err = Do(ctx, WithCappedDuration(3*time.Second, fib), func(_ context.Context) error {
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithCappedDuration(3*time.Second, b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
 		return nil
-	})
-	_ = err
+	}); err != nil {
+		// handle error
+	}
 }
 
 func TestWithMaxDuration(t *testing.T) {
 	t.Parallel()
 
-	b := WithMaxDuration(250*time.Millisecond, BackoffFunc(func() (time.Duration, bool) {
+	b := retry.WithMaxDuration(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
 		return 1 * time.Second, false
 	}))
 
@@ -212,14 +213,14 @@ func TestWithMaxDuration(t *testing.T) {
 
 func ExampleWithMaxDuration() {
 	ctx := context.Background()
-	fib, err := NewFibonacci(1 * time.Second)
-	if err != nil {
-		// handle err
-	}
 
-	err = Do(ctx, WithMaxDuration(5*time.Second, fib), func(_ context.Context) error {
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithMaxDuration(5*time.Second, b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
 		return nil
-	})
-	_ = err
+	}); err != nil {
+		// handle error
+	}
 }

@@ -128,10 +128,8 @@ func TestDo(t *testing.T) {
 
 func ExampleDo_simple() {
 	ctx := context.Background()
-	b, err := retry.NewFibonacci(1 * time.Nanosecond)
-	if err != nil {
-		// handle error
-	}
+
+	b := retry.NewFibonacci(1 * time.Nanosecond)
 
 	i := 0
 	if err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) error {
@@ -151,10 +149,8 @@ func ExampleDo_simple() {
 
 func ExampleDo_customRetry() {
 	ctx := context.Background()
-	b, err := retry.NewFibonacci(1 * time.Nanosecond)
-	if err != nil {
-		// handle error
-	}
+
+	b := retry.NewFibonacci(1 * time.Nanosecond)
 
 	// This example demonstrates selectively retrying specific errors. Only errors
 	// wrapped with RetryableError are eligible to be retried.

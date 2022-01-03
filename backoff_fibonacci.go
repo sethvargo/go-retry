@@ -2,7 +2,6 @@ package retry
 
 import (
 	"context"
-	"fmt"
 	"sync/atomic"
 	"time"
 	"unsafe"
@@ -14,26 +13,24 @@ type fibonacciBackoff struct {
 	state unsafe.Pointer
 }
 
-// Fibonacci is a wrapper around Retry that uses a Fibonacci backoff.
+// Fibonacci is a wrapper around Retry that uses a Fibonacci backoff. It panics
+// if the given base is less than zero.
 func Fibonacci(ctx context.Context, base time.Duration, f RetryFunc) error {
-	b, err := NewFibonacci(base)
-	if err != nil {
-		return err
-	}
-	return Do(ctx, b, f)
+	return Do(ctx, NewFibonacci(base), f)
 }
 
 // NewFibonacci creates a new Fibonacci backoff using the starting value of
 // base. The wait time is the sum of the previous two wait times on each failed
-// attempt (1, 1, 2, 3, 5, 8, 13...).
-func NewFibonacci(base time.Duration) (Backoff, error) {
+// attempt (1, 1, 2, 3, 5, 8, 13...). It panics if the given base is less than
+// zero.
+func NewFibonacci(base time.Duration) Backoff {
 	if base <= 0 {
-		return nil, fmt.Errorf("base must be greater than 0")
+		panic("base must be greater than 0")
 	}
 
 	return &fibonacciBackoff{
 		state: unsafe.Pointer(&state{0, base}),
-	}, nil
+	}
 }
 
 // Next implements Backoff. It is safe for concurrent use.

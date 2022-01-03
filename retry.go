@@ -63,7 +63,7 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 
 		next, stop := b.Next()
 		if stop {
-			return err
+			return rerr.Unwrap()
 		}
 
 		select {

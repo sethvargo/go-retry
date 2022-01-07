@@ -66,6 +66,13 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 			return rerr.Unwrap()
 		}
 
+		// ctx.Done() has priority, so we test it alone first
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		select {
 		case <-ctx.Done():
 			return ctx.Err()

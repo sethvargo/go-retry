@@ -49,14 +49,14 @@ func (e *retryableError) Error() string {
 // Do wraps a function with a backoff to retry. The provided context is the same
 // context passed to the RetryFunc.
 func Do(ctx context.Context, b Backoff, f RetryFunc) error {
-	// If ctx is already canceled, then return immediately without calling f
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
 	for {
+		// Return immediately if ctx is canceled
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+
 		err := f(ctx)
 		if err == nil {
 			return nil
@@ -71,13 +71,6 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 		next, stop := b.Next()
 		if stop {
 			return rerr.Unwrap()
-		}
-
-		// ctx.Done() has priority, so we test it alone first
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
 		}
 
 		select {

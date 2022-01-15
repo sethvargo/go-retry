@@ -42,10 +42,7 @@ func Benchmark(b *testing.B) {
 	})
 
 	b.Run("sethvargo", func(b *testing.B) {
-		backoff, err := sethvargo.NewExponential(1 * time.Second)
-		if err != nil {
-			b.Fatal(err)
-		}
+		backoff := sethvargo.NewExponential(1 * time.Second)
 		b.ResetTimer()
 
 		for i := 0; i < b.N; i++ {

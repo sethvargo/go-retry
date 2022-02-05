@@ -73,10 +73,19 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 			return rerr.Unwrap()
 		}
 
+		// ctx.Done() has priority, so we test it alone first
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(next):
+		default:
+		}
+
+		t := time.NewTimer(next)
+		select {
+		case <-ctx.Done():
+			t.Stop()
+			return ctx.Err()
+		case <-t.C:
 			continue
 		}
 	}

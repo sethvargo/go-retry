@@ -2,6 +2,7 @@ package retry_test
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -46,6 +47,23 @@ func TestExponentialBackoff(t *testing.T) {
 				2048 * time.Nanosecond,
 				4096 * time.Nanosecond,
 				8192 * time.Nanosecond,
+			},
+		},
+		{
+			name:  "overflow",
+			base:  100_000 * time.Hour,
+			tries: 10,
+			exp: []time.Duration{
+				100_000 * time.Hour,
+				200_000 * time.Hour,
+				400_000 * time.Hour,
+				800_000 * time.Hour,
+				1_600_000 * time.Hour,
+				math.MaxInt64,
+				math.MaxInt64,
+				math.MaxInt64,
+				math.MaxInt64,
+				math.MaxInt64,
 			},
 		},
 	}

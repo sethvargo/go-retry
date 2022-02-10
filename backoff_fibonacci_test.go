@@ -2,6 +2,7 @@ package retry_test
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"sort"
 	"testing"
@@ -58,6 +59,23 @@ func TestFibonacciBackoff(t *testing.T) {
 				233 * time.Nanosecond,
 				377 * time.Nanosecond,
 				610 * time.Nanosecond,
+			},
+		},
+		{
+			name:  "overflow",
+			base:  100_000 * time.Hour,
+			tries: 10,
+			exp: []time.Duration{
+				100_000 * time.Hour,
+				200_000 * time.Hour,
+				300_000 * time.Hour,
+				500_000 * time.Hour,
+				800_000 * time.Hour,
+				1_300_000 * time.Hour,
+				2_100_000 * time.Hour,
+				math.MaxInt64,
+				math.MaxInt64,
+				math.MaxInt64,
 			},
 		},
 	}

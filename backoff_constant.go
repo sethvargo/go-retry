@@ -19,7 +19,7 @@ func NewConstant(t time.Duration) Backoff {
 		panic("t must be greater than 0")
 	}
 
-	return BackoffFunc(func() (time.Duration, bool) {
-		return t, false
+	return BackoffFunc(func(err error) (time.Duration, error) {
+		return t, err
 	})
 }

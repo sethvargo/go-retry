@@ -36,12 +36,12 @@ func NewExponential(base time.Duration) Backoff {
 }
 
 // Next implements Backoff. It is safe for concurrent use.
-func (b *exponentialBackoff) Next() (time.Duration, bool) {
+func (b *exponentialBackoff) Next(err error) (time.Duration, error) {
 	next := b.base << (atomic.AddUint64(&b.attempt, 1) - 1)
 	if next <= 0 {
 		atomic.AddUint64(&b.attempt, ^uint64(0))
 		next = math.MaxInt64
 	}
 
-	return next, false
+	return next, err
 }

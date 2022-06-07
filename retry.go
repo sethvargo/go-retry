@@ -14,37 +14,11 @@ package retry
 
 import (
 	"context"
-	"errors"
 	"time"
 )
 
 // RetryFunc is a function passed to retry.
 type RetryFunc func(ctx context.Context) error
-
-type retryableError struct {
-	err error
-}
-
-// RetryableError marks an error as retryable.
-func RetryableError(err error) error {
-	if err == nil {
-		return nil
-	}
-	return &retryableError{err}
-}
-
-// Unwrap implements error wrapping.
-func (e *retryableError) Unwrap() error {
-	return e.err
-}
-
-// Error returns the error string.
-func (e *retryableError) Error() string {
-	if e.err == nil {
-		return "retryable: <nil>"
-	}
-	return "retryable: " + e.err.Error()
-}
 
 // Do wraps a function with a backoff to retry. The provided context is the same
 // context passed to the RetryFunc.
@@ -62,15 +36,9 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 			return nil
 		}
 
-		// Not retryable
-		var rerr *retryableError
-		if !errors.As(err, &rerr) {
+		delay, err := b.Next(err)
+		if delay < 0 {
 			return err
-		}
-
-		next, stop := b.Next()
-		if stop {
-			return rerr.Unwrap()
 		}
 
 		// ctx.Done() has priority, so we test it alone first
@@ -80,7 +48,7 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 		default:
 		}
 
-		t := time.NewTimer(next)
+		t := time.NewTimer(delay)
 		select {
 		case <-ctx.Done():
 			t.Stop()

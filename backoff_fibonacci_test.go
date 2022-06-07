@@ -91,7 +91,7 @@ func TestFibonacciBackoff(t *testing.T) {
 			resultsCh := make(chan time.Duration, tc.tries)
 			for i := 0; i < tc.tries; i++ {
 				go func() {
-					r, _ := b.Next()
+					r, _ := b.Next(nil)
 					resultsCh <- r
 				}()
 			}
@@ -99,8 +99,8 @@ func TestFibonacciBackoff(t *testing.T) {
 			results := make([]time.Duration, tc.tries)
 			for i := 0; i < tc.tries; i++ {
 				select {
-				case val := <-resultsCh:
-					results[i] = val
+				case delay := <-resultsCh:
+					results[i] = delay
 				case <-time.After(5 * time.Second):
 					t.Fatal("timeout")
 				}
@@ -120,8 +120,8 @@ func ExampleNewFibonacci() {
 	b := retry.NewFibonacci(1 * time.Second)
 
 	for i := 0; i < 5; i++ {
-		val, _ := b.Next()
-		fmt.Printf("%v\n", val)
+		delay, _ := b.Next(nil)
+		fmt.Printf("%v\n", delay)
 	}
 	// Output:
 	// 1s

@@ -29,8 +29,8 @@ func TestDo(t *testing.T) {
 		t.Parallel()
 
 		ctx := context.Background()
-		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Nanosecond, err
 		}))
 
 		var i int
@@ -51,9 +51,9 @@ func TestDo(t *testing.T) {
 		t.Parallel()
 
 		ctx := context.Background()
-		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
-		}))
+		b := retry.WithRetryable(retry.WithMaxRetries(3, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Nanosecond, err
+		})))
 
 		var i int
 		if err := retry.Do(ctx, b, func(_ context.Context) error {
@@ -72,9 +72,9 @@ func TestDo(t *testing.T) {
 		t.Parallel()
 
 		ctx := context.Background()
-		b := retry.WithMaxRetries(1, retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
-		}))
+		b := retry.WithRetryable(retry.WithMaxRetries(1, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Nanosecond, err
+		})))
 
 		err := retry.Do(ctx, b, func(_ context.Context) error {
 			return retry.RetryableError(io.EOF)
@@ -92,8 +92,8 @@ func TestDo(t *testing.T) {
 		t.Parallel()
 
 		ctx := context.Background()
-		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Nanosecond, false
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Nanosecond, err
 		}))
 
 		var i int
@@ -112,8 +112,8 @@ func TestDo(t *testing.T) {
 	t.Run("context_canceled", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
-			return 5 * time.Second, false
+		b := retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 5 * time.Second, err
 		})
 
 		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)

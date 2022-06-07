@@ -39,18 +39,18 @@ func NewFibonacci(base time.Duration) Backoff {
 }
 
 // Next implements Backoff. It is safe for concurrent use.
-func (b *fibonacciBackoff) Next() (time.Duration, bool) {
+func (b *fibonacciBackoff) Next(err error) (time.Duration, error) {
 	for {
 		curr := atomic.LoadPointer(&b.state)
 		currState := (*state)(curr)
 		next := currState[0] + currState[1]
 
 		if next <= 0 {
-			return math.MaxInt64, false
+			return math.MaxInt64, err
 		}
 
 		if atomic.CompareAndSwapPointer(&b.state, curr, unsafe.Pointer(&state{currState[1], next})) {
-			return next, false
+			return next, err
 		}
 	}
 }

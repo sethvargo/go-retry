@@ -33,17 +33,17 @@ func (b BackoffFunc) Next(err error) (time.Duration, error) {
 // never be less than 0.
 func WithJitter(j time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
-		val, err := next.Next(err)
-		if val < 0 {
+		delay, err := next.Next(err)
+		if delay < 0 {
 			return -1, err
 		}
 
 		diff := time.Duration(rand.Int63n(int64(j)*2) - int64(j))
-		val = val + diff
-		if val < 0 {
-			val = 0
+		delay = delay + diff
+		if delay < 0 {
+			delay = 0
 		}
-		return val, err
+		return delay, err
 	})
 }
 
@@ -53,8 +53,8 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 // value can never be less than 0 or greater than 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
-		val, err := next.Next(err)
-		if val < 0 {
+		delay, err := next.Next(err)
+		if delay < 0 {
 			return -1, err
 		}
 
@@ -62,11 +62,11 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		top := rand.Int63n(int64(j)*2) - int64(j)
 		pct := 1 - float64(top)/100.0
 
-		val = time.Duration(float64(val) * pct)
-		if val < 0 {
-			val = 0
+		delay = time.Duration(float64(delay) * pct)
+		if delay < 0 {
+			delay = 0
 		}
-		return val, err
+		return delay, err
 	})
 }
 
@@ -94,15 +94,15 @@ func WithMaxRetries(max uint64, next Backoff) Backoff {
 // continue infinitely.
 func WithCappedDuration(cap time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
-		val, err := next.Next(err)
-		if val < 0 {
+		delay, err := next.Next(err)
+		if delay < 0 {
 			return -1, err
 		}
 
-		if val <= 0 || val > cap {
-			val = cap
+		if delay <= 0 || delay > cap {
+			delay = cap
 		}
-		return val, err
+		return delay, err
 	})
 }
 
@@ -118,15 +118,15 @@ func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 			return -1, err
 		}
 
-		val, err := next.Next(err)
-		if val < 0 {
+		delay, err := next.Next(err)
+		if delay < 0 {
 			return -1, err
 		}
 
-		if val <= 0 || val > diff {
-			val = diff
+		if delay <= 0 || delay > diff {
+			delay = diff
 		}
-		return val, err
+		return delay, err
 	})
 }
 

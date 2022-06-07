@@ -47,8 +47,8 @@ func main() {
   ctx := context.Background()
   if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
     if err := db.PingContext(ctx); err != nil {
-      // This marks the error as retryable
-      return retry.RetryableError(err)
+      // Retry in case of an error
+      return err
     }
     return nil
   }); err != nil {
@@ -114,6 +114,29 @@ The built-in backoff algorithms never terminate and have no caps or limits - you
 control their behavior with middleware. There's built-in middleware, but you can
 also write custom middleware.
 
+### Retryable
+
+To only retry on selective errors use `retry.RetryableError(err)` to mark the desired errors and include the `WithRetryable` modifier.
+
+```golang
+b := NewFibonacci(1 * time.Second)
+
+// Stops, if error is not of type retryableError
+b = WithRetryable(b)
+```
+
+Mark the desired errors as such:
+
+```golang
+retryFunc := func(ctx context.Context) error {
+  if err := db.PingContext(ctx); err != nil {
+    // This marks the error as retryable
+    return retry.RetryableError(err)
+  }
+  return nil
+}
+```
+
 ### Jitter
 
 To reduce the changes of a thundering herd, add random jitter to the returned
@@ -163,6 +186,93 @@ b := NewFibonacci(1 * time.Second)
 
 // Ensure the maximum total retry time is 5s.
 b = WithMaxDuration(5 * time.Second, b)
+```
+
+## Customize
+
+A custom middleware can be used to handle errors based on the information they carry. Here is an example to address a HTTP response errors:
+
+```golang
+// httpRetryableError is an error that holds additional response information.
+type httpRetryableError struct {
+	err  error
+	resp http.Response
+}
+
+func (e *httpRetryableError) Unwrap() error {
+	return e.err
+}
+
+func (e *httpRetryableError) Error() string {
+	return e.err.Error()
+}
+
+// WithHTTPResponse is a custom middleware that uses information from the
+// response to determine a backoff delay duration.
+func WithHTTPResponse(next retry.Backoff) retry.Backoff {
+	return retry.BackoffFunc(func(err error) (time.Duration, error) {
+		var herr *httpRetryableError
+		if !errors.As(err, &herr) {
+			return -1, err
+		}
+		err = herr.Unwrap()
+
+		// get the values from the other backoff middleware (here just exponential backoff)
+		delay, err := next.Next(err)
+		if delay < 0 {
+			return -1, err
+		}
+
+		// handle backoff with extra information from response
+		switch herr.resp.StatusCode {
+		case 427:
+			retryAfter, err := strconv.Atoi(herr.resp.Header.Get("Retry-After"))
+			if err != nil {
+				retryAfter = 10
+			}
+			delay = time.Duration(retryAfter) * time.Second
+		case 500:
+			delay = 10 * time.Second
+		}
+
+		// return backoff calculated by other wrappers
+		return delay, err
+	})
+}
+
+func main() {
+	ctx := context.Background()
+
+	b := retry.NewExponential(1 * time.Second)
+	b = WithHTTPResponse(b)
+
+	var body []byte
+	err := retry.Do(ctx, b, func(_ context.Context) error {
+		resp, err := http.Get(ts.URL)
+
+		if err == nil {
+			if resp.StatusCode != 200 {
+				// wrap a non 200 response into a httpRetryableError to trigger the
+				// backoff mechanism
+				return &httpRetryableError{
+					err:  err,
+					resp: *resp,
+				}
+			}
+
+			defer func() {
+				if err := resp.Body.Close(); err != nil {
+					panic(err)
+				}
+			}()
+			body, err = ioutil.ReadAll(resp.Body)
+		}
+
+		return err
+	})
+
+	fmt.Println(string(myBytes))
+}
 ```
 
 ## Benchmarks

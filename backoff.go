@@ -27,6 +27,14 @@ func (b BackoffFunc) Next(err error) (time.Duration, error) {
 	return b(err)
 }
 
+// Stop value signals the backoff to stop retrying.
+const Stop = time.Duration(-1)
+
+// IsStopped reports whether the backoff shall stop.
+func IsStopped(delay time.Duration) bool {
+	return delay < 0
+}
+
 // WithJitter wraps a backoff function and adds the specified jitter. j can be
 // interpreted as "+/- j". For example, if j were 5 seconds and the backoff
 // returned 20s, the value could be between 15 and 25 seconds. The value can
@@ -34,13 +42,13 @@ func (b BackoffFunc) Next(err error) (time.Duration, error) {
 func WithJitter(j time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		delay, err := next.Next(err)
-		if delay < 0 {
-			return -1, err
+		if IsStopped(delay) {
+			return Stop, err
 		}
 
 		diff := time.Duration(rand.Int63n(int64(j)*2) - int64(j))
 		delay = delay + diff
-		if delay < 0 {
+		if IsStopped(delay) {
 			delay = 0
 		}
 		return delay, err
@@ -54,8 +62,8 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 func WithJitterPercent(j uint64, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		delay, err := next.Next(err)
-		if delay < 0 {
-			return -1, err
+		if IsStopped(delay) {
+			return Stop, err
 		}
 
 		// Get a value between -j and j, the convert to a percentage
@@ -63,7 +71,7 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		pct := 1 - float64(top)/100.0
 
 		delay = time.Duration(float64(delay) * pct)
-		if delay < 0 {
+		if IsStopped(delay) {
 			delay = 0
 		}
 		return delay, err
@@ -80,7 +88,7 @@ func WithMaxRetries(max uint64, next Backoff) Backoff {
 		defer l.Unlock()
 
 		if attempt >= max {
-			return -1, err
+			return Stop, err
 		}
 		attempt++
 
@@ -95,8 +103,8 @@ func WithMaxRetries(max uint64, next Backoff) Backoff {
 func WithCappedDuration(cap time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		delay, err := next.Next(err)
-		if delay < 0 {
-			return -1, err
+		if IsStopped(delay) {
+			return Stop, err
 		}
 
 		if delay <= 0 || delay > cap {
@@ -115,12 +123,12 @@ func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		diff := timeout - time.Since(start)
 		if diff <= 0 {
-			return -1, err
+			return Stop, err
 		}
 
 		delay, err := next.Next(err)
-		if delay < 0 {
-			return -1, err
+		if IsStopped(delay) {
+			return Stop, err
 		}
 
 		if delay <= 0 || delay > diff {
@@ -161,7 +169,7 @@ func WithRetryable(next Backoff) Backoff {
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		var rerr *retryableError
 		if !errors.As(err, &rerr) {
-			return -1, err
+			return Stop, err
 		}
 		return next.Next(rerr.Unwrap())
 	})

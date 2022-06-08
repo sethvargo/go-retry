@@ -21,8 +21,8 @@ func ExampleBackoffFunc() {
 	withShift := func(t time.Duration, next retry.Backoff) retry.BackoffFunc {
 		return func(err error) (time.Duration, error) {
 			delay, err := next.Next(err)
-			if delay < 0 {
-				return -1, err
+			if retry.IsStopped(delay) {
+				return retry.Stop, err
 			}
 			return delay + t, err
 		}
@@ -48,7 +48,7 @@ func TestWithJitter(t *testing.T) {
 			return 1 * time.Second, err
 		}))
 		delay, _ := b.Next(nil)
-		if delay < 0 {
+		if retry.IsStopped(delay) {
 			t.Errorf("should not stop")
 		}
 
@@ -80,7 +80,7 @@ func TestWithJitterPercent(t *testing.T) {
 			return 1 * time.Second, err
 		}))
 		delay, _ := b.Next(nil)
-		if delay < 0 {
+		if retry.IsStopped(delay) {
 			t.Errorf("should not stop")
 		}
 
@@ -114,7 +114,7 @@ func TestWithMaxRetries(t *testing.T) {
 	// First 3 attempts succeed
 	for i := 0; i < 3; i++ {
 		delay, _ := b.Next(nil)
-		if delay < 0 {
+		if retry.IsStopped(delay) {
 			t.Errorf("should not stop")
 		}
 		if delay != 1*time.Second {
@@ -151,7 +151,7 @@ func TestWithCappedDuration(t *testing.T) {
 	}))
 
 	delay, _ := b.Next(nil)
-	if delay < 0 {
+	if retry.IsStopped(delay) {
 		t.Errorf("should not stop")
 	}
 	if delay != 3*time.Second {
@@ -182,7 +182,7 @@ func TestWithMaxDuration(t *testing.T) {
 
 	// Take once, within timeout.
 	delay, _ := b.Next(nil)
-	if delay < 0 {
+	if retry.IsStopped(delay) {
 		t.Error("should not stop")
 	}
 
@@ -194,7 +194,7 @@ func TestWithMaxDuration(t *testing.T) {
 
 	// Take again, remainder contines
 	delay, _ = b.Next(nil)
-	if delay < 0 {
+	if retry.IsStopped(delay) {
 		t.Error("should not stop")
 	}
 
@@ -243,13 +243,13 @@ func TestWithCustom(t *testing.T) {
 		return retry.BackoffFunc(func(err error) (time.Duration, error) {
 			var herr *httpRetryableError
 			if !errors.As(err, &herr) {
-				return -1, err
+				return retry.Stop, err
 			}
 			err = herr.Unwrap()
 
 			delay, err := next.Next(err)
-			if delay < 0 {
-				return -1, err
+			if retry.IsStopped(delay) {
+				return retry.Stop, err
 			}
 
 			switch herr.resp.StatusCode {

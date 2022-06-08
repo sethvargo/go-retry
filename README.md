@@ -213,14 +213,14 @@ func WithHTTPResponse(next retry.Backoff) retry.Backoff {
 	return retry.BackoffFunc(func(err error) (time.Duration, error) {
 		var herr *httpRetryableError
 		if !errors.As(err, &herr) {
-			return -1, err
+			return retry.Stop, err
 		}
 		err = herr.Unwrap()
 
 		// get the values from the other backoff middleware (here just exponential backoff)
 		delay, err := next.Next(err)
-		if delay < 0 {
-			return -1, err
+		if retry.IsStopped(delay) {
+			return retry.Stop, err
 		}
 
 		// handle backoff with extra information from response

@@ -37,7 +37,7 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 		}
 
 		delay, err := b.Next(err)
-		if delay < 0 {
+		if IsStopped(delay) {
 			return err
 		}
 

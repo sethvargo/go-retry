@@ -145,11 +145,15 @@ value.
 ```golang
 b := NewFibonacci(1 * time.Second)
 
-// Return the next value, +/- 500ms
-b = WithJitter(500*time.Millisecond, b)
+// Add up to ±500ms jitter to the result
+b = WithJitter(500*time.Millisecond, false, b)
+// Increase the result by up to +500ms
+b = WithJitter(500*time.Millisecond, true, b)
 
-// Return the next value, +/- 5% of the result
-b = WithJitterPercent(5, b)
+// Add up to ±5% jitter to the result
+b = WithJitterPercent(5, false, b)
+// Increase the result by up to +5%
+b = WithJitterPercent(5, true, b)
 ```
 
 ### MaxRetries

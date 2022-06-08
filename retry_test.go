@@ -194,7 +194,7 @@ func TestCancel(t *testing.T) {
 		b = retry.WithMaxRetries(maxRetries, b)
 
 		const jitter time.Duration = 5 * time.Millisecond
-		b = retry.WithJitter(jitter, b)
+		b = retry.WithJitter(jitter, false, b)
 
 		// Here we cancel the Context *before* the call to Do
 		cancel()

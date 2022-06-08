@@ -43,8 +43,8 @@ func ExampleBackoffFunc() {
 func TestWithJitter(t *testing.T) {
 	t.Parallel()
 
-	for i := 0; i < 100_000; i++ {
-		b := retry.WithJitter(250*time.Millisecond, retry.BackoffFunc(func(err error) (time.Duration, error) {
+	for i := 0; i < 10_000; i++ {
+		b := retry.WithJitter(250*time.Millisecond, false, retry.BackoffFunc(func(err error) (time.Duration, error) {
 			return 1 * time.Second, err
 		}))
 		delay, _ := b.Next(nil)
@@ -56,13 +56,27 @@ func TestWithJitter(t *testing.T) {
 			t.Errorf("expected %v to be between %v and %v", delay, min, max)
 		}
 	}
+
+	for i := 0; i < 10_000; i++ {
+		b := retry.WithJitter(500*time.Millisecond, true, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Second, err
+		}))
+		delay, _ := b.Next(nil)
+		if retry.IsStopped(delay) {
+			t.Errorf("should not stop")
+		}
+
+		if min, max := 1000*time.Millisecond, 1500*time.Millisecond; delay < min || delay > max {
+			t.Errorf("expected %v to be between %v and %v", delay, min, max)
+		}
+	}
 }
 
 func ExampleWithJitter() {
 	ctx := context.Background()
 
 	b := retry.NewFibonacci(1 * time.Second)
-	b = retry.WithJitter(1*time.Second, b)
+	b = retry.WithJitter(1*time.Second, false, b)
 
 	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here
@@ -75,8 +89,8 @@ func ExampleWithJitter() {
 func TestWithJitterPercent(t *testing.T) {
 	t.Parallel()
 
-	for i := 0; i < 100_000; i++ {
-		b := retry.WithJitterPercent(5, retry.BackoffFunc(func(err error) (time.Duration, error) {
+	for i := 0; i < 10_000; i++ {
+		b := retry.WithJitterPercent(5, false, retry.BackoffFunc(func(err error) (time.Duration, error) {
 			return 1 * time.Second, err
 		}))
 		delay, _ := b.Next(nil)
@@ -88,13 +102,27 @@ func TestWithJitterPercent(t *testing.T) {
 			t.Errorf("expected %v to be between %v and %v", delay, min, max)
 		}
 	}
+
+	for i := 0; i < 10_000; i++ {
+		b := retry.WithJitterPercent(5, true, retry.BackoffFunc(func(err error) (time.Duration, error) {
+			return 1 * time.Second, err
+		}))
+		delay, _ := b.Next(nil)
+		if retry.IsStopped(delay) {
+			t.Errorf("should not stop")
+		}
+
+		if min, max := 1000*time.Millisecond, 1050*time.Millisecond; delay < min || delay > max {
+			t.Errorf("expected %v to be between %v and %v", delay, min, max)
+		}
+	}
 }
 
 func ExampleWithJitterPercent() {
 	ctx := context.Background()
 
 	b := retry.NewFibonacci(1 * time.Second)
-	b = retry.WithJitterPercent(5, b)
+	b = retry.WithJitterPercent(5, false, b)
 
 	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here

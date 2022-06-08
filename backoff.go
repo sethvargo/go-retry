@@ -35,43 +35,61 @@ func IsStopped(delay time.Duration) bool {
 	return delay < 0
 }
 
-// WithJitter wraps a backoff function and adds the specified jitter. j can be
-// interpreted as "+/- j". For example, if j were 5 seconds and the backoff
-// returned 20s, the value could be between 15 and 25 seconds. The value can
-// never be less than 0.
-func WithJitter(j time.Duration, next Backoff) Backoff {
+// WithJitter wraps a backoff function and adds the specified jitter.
+// If addOnly is specified, then a jitter up to +j will be added on top of the
+// backoff; otherwise a jitter up to ±j will be applied. For example, if j is
+// 5s, addOnly is false and the backoff returned is 20s, then the resulting
+// value could be between 15 and 25 seconds. Panics if j is less than 0.
+func WithJitter(j time.Duration, addOnly bool, next Backoff) Backoff {
+	if j < 0 {
+		panic("jitter must be >= 0")
+	}
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		delay, err := next.Next(err)
 		if IsStopped(delay) {
 			return Stop, err
 		}
 
-		diff := time.Duration(rand.Int63n(int64(j)*2) - int64(j))
-		delay = delay + diff
-		if IsStopped(delay) {
-			delay = 0
+		if addOnly {
+			delay += time.Duration(rand.Int63n(int64(j)))
+		} else {
+			diff := time.Duration(rand.Int63n(int64(j)*2) - int64(j))
+			delay = delay + diff
+			if delay < 0 {
+				delay = 0
+			}
 		}
 		return delay, err
 	})
 }
 
 // WithJitterPercent wraps a backoff function and adds the specified jitter
-// percentage. j can be interpreted as "+/- j%". For example, if j were 5 and
-// the backoff returned 20s, the value could be between 19 and 21 seconds. The
-// value can never be less than 0 or greater than 100.
-func WithJitterPercent(j uint64, next Backoff) Backoff {
+// percentage.
+// If addOnly is specified, then a jitter up to +j% will be added on top of the
+// backoff; otherwise a jitter up to ±j% will be applied. For example, if j is
+// 5, addOnly is false and the backoff returned is 20s, then the resulting
+// value could be between 19 and 21 seconds. Panics if j is less than 0 or greater than 100.
+func WithJitterPercent(j uint64, addOnly bool, next Backoff) Backoff {
+	if j < 0 && j > 100 {
+		panic("jitter must be between 0 and 100")
+	}
 	return BackoffFunc(func(err error) (time.Duration, error) {
 		delay, err := next.Next(err)
 		if IsStopped(delay) {
 			return Stop, err
 		}
 
-		// Get a value between -j and j, the convert to a percentage
-		top := rand.Int63n(int64(j)*2) - int64(j)
+		var top int64
+		if addOnly {
+			top = rand.Int63n(int64(j))
+		} else {
+			// get random value between -j and +j
+			top = rand.Int63n(int64(j)*2) - int64(j)
+		}
 		pct := 1 - float64(top)/100.0
 
 		delay = time.Duration(float64(delay) * pct)
-		if IsStopped(delay) {
+		if delay < 0 {
 			delay = 0
 		}
 		return delay, err

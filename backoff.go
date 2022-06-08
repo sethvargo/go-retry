@@ -86,7 +86,7 @@ func WithJitterPercent(j uint64, addOnly bool, next Backoff) Backoff {
 			// get random value between -j and +j
 			top = rand.Int63n(int64(j)*2) - int64(j)
 		}
-		pct := 1 - float64(top)/100.0
+		pct := 1 + float64(top)/100.0
 
 		delay = time.Duration(float64(delay) * pct)
 		if delay < 0 {

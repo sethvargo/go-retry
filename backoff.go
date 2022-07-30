@@ -133,3 +133,24 @@ func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 		return val, false
 	})
 }
+
+type RateLimiter interface {
+	Allow() bool
+}
+
+// WithBlockingRateLimiter uses the provided nlocking rate-limiter to decide
+// whether backoff should stop. It's helpful in stopping retry storms. Any
+// rate limiter algorithms such as token bucket or leaky bucket can be used
+// with this based on requirement.
+func WithBlockingRateLimiter(rateLimiter RateLimiter, next Backoff) Backoff {
+	var l sync.Mutex
+
+	return BackoffFunc(func() (time.Duration, bool) {
+		l.Lock()
+		defer l.Unlock()
+		if !rateLimiter.Allow() {
+			return 0, true
+		}
+		return next.Next()
+	})
+}

@@ -165,6 +165,22 @@ b := NewFibonacci(1 * time.Second)
 b = WithMaxDuration(5 * time.Second, b)
 ```
 
+### WithBlockingRateLimiter
+
+For use with a provided blocking rate-limiter on request scope. This is
+helpful for avoiding [retry-storms](https://docs.microsoft.com/en-us/azure/architecture/antipatterns/retry-storm/)
+across lifecyle of multiple requests:
+```golang
+b := NewFibonacci(1 * time.Second)
+
+// Implementation to be provided by you.
+// Ensure the rate limiter is blocking.
+// The config for rate and scope must be configured here.
+rl := RateLimiter()
+
+b = WithBlockingRateLimiter(rl, b)
+```
+
 ## Benchmarks
 
 Here are benchmarks against some other popular Go backoff and retry libraries.

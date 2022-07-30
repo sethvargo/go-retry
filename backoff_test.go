@@ -224,3 +224,42 @@ func ExampleWithMaxDuration() {
 		// handle error
 	}
 }
+
+type RateLimiter struct {
+	mockAllow *bool
+}
+
+func (rl *RateLimiter) Allow() bool {
+	return *rl.mockAllow
+}
+
+func mockRateLimiter(mockAllow *bool) retry.RateLimiter {
+
+	return &RateLimiter{
+		mockAllow: mockAllow,
+	}
+}
+
+func TestWithBlockingRateLimiter(t *testing.T) {
+	t.Parallel()
+
+	mockAllow := true
+
+	b := retry.WithBlockingRateLimiter(mockRateLimiter(&mockAllow), retry.BackoffFunc(func() (time.Duration, bool) {
+		return 1 * time.Second, false
+	}))
+
+	// When rate limiter allows.
+	_, stop := b.Next()
+	if stop {
+		t.Error("should not stop")
+	}
+
+	mockAllow = false
+	// When rate limiter does not allow.
+	_, stop = b.Next()
+	if !stop {
+		t.Error("should have stopped")
+	}
+
+}

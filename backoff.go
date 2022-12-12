@@ -22,12 +22,9 @@ func (r *rng) Int63n(n int64) int64 {
 	if n <= 0 {
 		panic("invalid argument to Int63n")
 	}
-
-	// can mask if n is power of two
-	if n&(n-1) == 0 {
+	if n&(n-1) == 0 { // n is power of two, can mask
 		return r.Int63() & (n - 1)
 	}
-
 	max := int64((1 << 63) - 1 - (1<<63)%uint64(n))
 	v := r.Int63()
 	for v > max {

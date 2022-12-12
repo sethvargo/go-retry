@@ -9,8 +9,8 @@ import (
 var r = &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 
 type lockedSource struct {
-	lk  sync.Mutex
 	src *rand.Rand
+	lk  sync.Mutex
 }
 
 var _ rand.Source = (*lockedSource)(nil)

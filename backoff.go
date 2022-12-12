@@ -1,37 +1,9 @@
 package retry
 
 import (
-	"math/rand"
 	"sync"
 	"time"
 )
-
-type rng struct {
-	r *rand.Rand
-	sync.Mutex
-}
-
-func (r *rng) Int63() int64 {
-	r.Lock()
-	n := r.r.Int63()
-	r.Unlock()
-	return n
-}
-
-func (r *rng) Int63n(n int64) int64 {
-	if n <= 0 {
-		panic("invalid argument to Int63n")
-	}
-	if n&(n-1) == 0 { // n is power of two, can mask
-		return r.Int63() & (n - 1)
-	}
-	max := int64((1 << 63) - 1 - (1<<63)%uint64(n))
-	v := r.Int63()
-	for v > max {
-		v = r.Int63()
-	}
-	return v % n
-}
 
 // Backoff is an interface that backs off.
 type Backoff interface {
@@ -54,7 +26,6 @@ func (b BackoffFunc) Next() (time.Duration, bool) {
 // returned 20s, the value could be between 15 and 25 seconds. The value can
 // never be less than 0.
 func WithJitter(j time.Duration, next Backoff) Backoff {
-	r := &rng{r: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
@@ -75,7 +46,6 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 // the backoff returned 20s, the value could be between 19 and 21 seconds. The
 // value can never be less than 0 or greater than 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
-	r := &rng{r: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {

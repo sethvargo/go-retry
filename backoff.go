@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"math/rand"
 	"sync"
 	"time"
 )
@@ -26,6 +27,7 @@ func (b BackoffFunc) Next() (time.Duration, bool) {
 // returned 20s, the value could be between 15 and 25 seconds. The value can
 // never be less than 0.
 func WithJitter(j time.Duration, next Backoff) Backoff {
+	r := &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
@@ -46,6 +48,7 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 // the backoff returned 20s, the value could be between 19 and 21 seconds. The
 // value can never be less than 0 or greater than 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
+	r := &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {

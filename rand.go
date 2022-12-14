@@ -7,29 +7,33 @@ import (
 
 type lockedSource struct {
 	src *rand.Rand
-	lk  sync.Mutex
+	mu  sync.Mutex
 }
 
 var _ rand.Source64 = (*lockedSource)(nil)
 
+func newLockedRandom(seed int64) *lockedSource {
+	return &lockedSource{src: rand.New(rand.NewSource(seed))}
+}
+
 // Int63 mimics math/rand.(*Rand).Int63 with mutex locked.
 func (r *lockedSource) Int63() int64 {
-	r.lk.Lock()
-	defer r.lk.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.src.Int63()
 }
 
 // Seed mimics math/rand.(*Rand).Seed with mutex locked.
 func (r *lockedSource) Seed(seed int64) {
-	r.lk.Lock()
-	defer r.lk.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.src.Seed(seed)
 }
 
 // Uint64 mimics math/rand.(*Rand).Uint64 with mutex locked.
 func (r *lockedSource) Uint64() uint64 {
-	r.lk.Lock()
-	defer r.lk.Unlock()
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	return r.src.Uint64()
 }
 

@@ -6,10 +6,6 @@ import (
 	"time"
 )
 
-func init() {
-	rand.Seed(time.Now().UnixNano())
-}
-
 // Backoff is an interface that backs off.
 type Backoff interface {
 	// Next returns the time duration to wait and whether to stop.
@@ -31,13 +27,14 @@ func (b BackoffFunc) Next() (time.Duration, bool) {
 // returned 20s, the value could be between 15 and 25 seconds. The value can
 // never be less than 0.
 func WithJitter(j time.Duration, next Backoff) Backoff {
+	r := &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
 			return 0, true
 		}
 
-		diff := time.Duration(rand.Int63n(int64(j)*2) - int64(j))
+		diff := time.Duration(r.Int63n(int64(j)*2) - int64(j))
 		val = val + diff
 		if val < 0 {
 			val = 0
@@ -51,6 +48,7 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 // the backoff returned 20s, the value could be between 19 and 21 seconds. The
 // value can never be less than 0 or greater than 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
+	r := &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
@@ -58,7 +56,7 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		}
 
 		// Get a value between -j and j, the convert to a percentage
-		top := rand.Int63n(int64(j)*2) - int64(j)
+		top := r.Int63n(int64(j)*2) - int64(j)
 		pct := 1 - float64(top)/100.0
 
 		val = time.Duration(float64(val) * pct)

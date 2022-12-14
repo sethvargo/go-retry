@@ -3,31 +3,34 @@ package retry
 import (
 	"math/rand"
 	"sync"
-	"time"
 )
-
-var r = &lockedSource{src: rand.New(rand.NewSource(time.Now().UnixNano()))}
 
 type lockedSource struct {
 	src *rand.Rand
 	lk  sync.Mutex
 }
 
-var _ rand.Source = (*lockedSource)(nil)
+var _ rand.Source64 = (*lockedSource)(nil)
 
 // Int63 mimics math/rand.(*Rand).Int63 with mutex locked.
 func (r *lockedSource) Int63() int64 {
 	r.lk.Lock()
-	n := r.src.Int63()
-	r.lk.Unlock()
-	return n
+	defer r.lk.Unlock()
+	return r.src.Int63()
 }
 
 // Seed mimics math/rand.(*Rand).Seed with mutex locked.
 func (r *lockedSource) Seed(seed int64) {
 	r.lk.Lock()
+	defer r.lk.Unlock()
 	r.src.Seed(seed)
-	r.lk.Unlock()
+}
+
+// Uint64 mimics math/rand.(*Rand).Uint64 with mutex locked.
+func (r *lockedSource) Uint64() uint64 {
+	r.lk.Lock()
+	defer r.lk.Unlock()
+	return r.src.Uint64()
 }
 
 // Int63n mimics math/rand.(*Rand).Int63n with mutex locked.

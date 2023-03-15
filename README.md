@@ -1,7 +1,6 @@
 # Retry
 
 [![GoDoc](https://img.shields.io/badge/go-documentation-blue.svg?style=flat-square)](https://pkg.go.dev/mod/github.com/sethvargo/go-retry)
-[![GitHub Actions](https://img.shields.io/github/workflow/status/sethvargo/go-retry/Test?style=flat-square)](https://github.com/sethvargo/go-retry/actions?query=workflow%3ATest)
 
 Retry is a Go library for facilitating retry logic and backoff. It's highly
 extensible with full control over how and when retries occur. You can also write

@@ -25,33 +25,33 @@ your own custom backoff functions by implementing the Backoff interface.
 Here is an example use for connecting to a database using Go's `database/sql`
 package:
 
-```golang
+```go
 package main
 
 import (
-  "context"
-  "database/sql"
-  "log"
-  "time"
+	"context"
+	"database/sql"
+	"log"
+	"time"
 
-  "github.com/sethvargo/go-retry"
+	"github.com/sethvargo/go-retry"
 )
 
 func main() {
-  db, err := sql.Open("mysql", "...")
-  if err != nil {
-    log.Fatal(err)
-  }
+	db, err := sql.Open("mysql", "...")
+	if err != nil {
+		log.Fatal(err)
+	}
 
-  ctx := context.Background()
-  if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
-    if err := db.PingContext(ctx); err != nil {
-      // This marks the error as retryable
-      return retry.RetryableError(err)
-    }
-    return nil
-  }); err != nil {
-    log.Fatal(err)
+	ctx := context.Background()
+	if err := retry.Fibonacci(ctx, 1*time.Second, func(ctx context.Context) error {
+		if err := db.PingContext(ctx); err != nil {
+			// This marks the error as retryable
+			return retry.RetryableError(err)
+		}
+		return nil
+	}); err != nil {
+		log.Fatal(err)
   }
 }
 ```

@@ -15,7 +15,7 @@ func Constant(ctx context.Context, t time.Duration, f RetryFunc) error {
 // is the provided constant value. It panics if the given base is less than
 // zero.
 func NewConstant(t time.Duration) Backoff {
-	if t <= 0 {
+	if t < 0 {
 		panic("t must be greater than 0")
 	}
 

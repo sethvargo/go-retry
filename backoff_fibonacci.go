@@ -21,8 +21,8 @@ func Fibonacci(ctx context.Context, base time.Duration, f RetryFunc) error {
 }
 
 // NewFibonacci creates a new Fibonacci backoff using the starting value of
-// base. The wait time is the sum of the previous two wait times on each failed
-// attempt (1, 1, 2, 3, 5, 8, 13...).
+// base. The wait time is the sum of the previous two wait times on each previous
+// attempt (1, 2, 3, 5, 8, 13...).
 //
 // Once it overflows, the function constantly returns the maximum time.Duration
 // for a 64-bit integer.

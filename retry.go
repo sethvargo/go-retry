@@ -18,8 +18,11 @@ import (
 	"time"
 )
 
-// RetryFunc is a function passed to retry.
+// RetryFunc is a function passed to [Do].
 type RetryFunc func(ctx context.Context) error
+
+// RetryFuncValue is a function passed to [Do] which returns a value.
+type RetryFuncValue[T any] func(ctx context.Context) (T, error)
 
 type retryableError struct {
 	err error
@@ -46,37 +49,37 @@ func (e *retryableError) Error() string {
 	return "retryable: " + e.err.Error()
 }
 
-// Do wraps a function with a backoff to retry. The provided context is the same
-// context passed to the RetryFunc.
-func Do(ctx context.Context, b Backoff, f RetryFunc) error {
+func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
+	var nilT T
+
 	for {
 		// Return immediately if ctx is canceled
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nilT, ctx.Err()
 		default:
 		}
 
-		err := f(ctx)
+		v, err := f(ctx)
 		if err == nil {
-			return nil
+			return v, nil
 		}
 
 		// Not retryable
 		var rerr *retryableError
 		if !errors.As(err, &rerr) {
-			return err
+			return nilT, err
 		}
 
 		next, stop := b.Next()
 		if stop {
-			return rerr.Unwrap()
+			return nilT, rerr.Unwrap()
 		}
 
 		// ctx.Done() has priority, so we test it alone first
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nilT, ctx.Err()
 		default:
 		}
 
@@ -84,9 +87,18 @@ func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return ctx.Err()
+			return nilT, ctx.Err()
 		case <-t.C:
 			continue
 		}
 	}
+}
+
+// Do wraps a function with a backoff to retry. The provided context is the same
+// context passed to the [RetryFunc].
+func Do(ctx context.Context, b Backoff, f RetryFunc) error {
+	_, err := DoValue(ctx, b, func(ctx context.Context) (*struct{}, error) {
+		return nil, f(ctx)
+	})
+	return err
 }

@@ -22,6 +22,30 @@ func TestRetryableError(t *testing.T) {
 	}
 }
 
+func TestDoValue(t *testing.T) {
+	t.Parallel()
+
+	t.Run("returns_value", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
+		v, err := retry.DoValue(ctx, b, func(_ context.Context) (string, error) {
+			return "foo", nil
+		})
+		if err != nil {
+			t.Fatal("expected err")
+		}
+
+		if got, want := v, "foo"; got != want {
+			t.Errorf("expected %v to be %v", got, want)
+		}
+	})
+}
+
 func TestDo(t *testing.T) {
 	t.Parallel()
 
@@ -173,6 +197,34 @@ func ExampleDo_customRetry() {
 	}); err != nil {
 		// handle error
 	}
+}
+
+func ExampleDoValue() {
+	ctx := context.Background()
+
+	b := retry.NewFibonacci(1 * time.Nanosecond)
+
+	body, err := retry.DoValue(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) ([]byte, error) {
+		resp, err := http.Get("https://google.com/")
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		switch resp.StatusCode / 100 {
+		case 4:
+			return nil, fmt.Errorf("bad response: %v", resp.StatusCode)
+		case 5:
+			return nil, retry.RetryableError(fmt.Errorf("bad response: %v", resp.StatusCode))
+		default:
+			b, _ := io.ReadAll(resp.Body)
+			return b, nil
+		}
+	})
+	if err != nil {
+		// handle error
+	}
+	_ = body
 }
 
 func TestCancel(t *testing.T) {

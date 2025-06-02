@@ -44,6 +44,25 @@ func TestDoValue(t *testing.T) {
 			t.Errorf("expected %v to be %v", got, want)
 		}
 	})
+
+	t.Run("get_retry_count", func(t *testing.T) {
+		t.Parallel()
+
+		ctx := context.Background()
+		b := retry.WithMaxRetries(3, retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Nanosecond, false
+		}))
+
+		var expectedCount uint64
+		_, _ = retry.DoValue(ctx, b, func(ctx context.Context) (string, error) {
+			actualCount := retry.GetRetryCount(ctx)
+			if expectedCount != actualCount {
+				t.Errorf("expected %d to be %d", actualCount, expectedCount)
+			}
+			expectedCount++
+			return "", retry.RetryableError(fmt.Errorf("oops"))
+		})
+	})
 }
 
 func TestDo(t *testing.T) {

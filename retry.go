@@ -49,9 +49,25 @@ func (e *retryableError) Error() string {
 	return "retryable: " + e.err.Error()
 }
 
+type retryCountKey struct{}
+
+// GetRetryCount returns the number of retries so far. The first attempt will return 0.
+func GetRetryCount(ctx context.Context) uint64 {
+	retries, ok := ctx.Value(retryCountKey{}).(uint64)
+	if !ok {
+		retries = 0
+	}
+	return retries
+}
+
+func setRetryCount(ctx context.Context, retries uint64) context.Context {
+	return context.WithValue(ctx, retryCountKey{}, retries)
+}
+
 func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
 	var nilT T
 
+	var retries uint64
 	for {
 		// Return immediately if ctx is canceled
 		select {
@@ -60,7 +76,9 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		default:
 		}
 
-		v, err := f(ctx)
+		// Ensure new context will go out of scope so it can get GC'd
+		ctxWithRetryCount := setRetryCount(ctx, retries)
+		v, err := f(ctxWithRetryCount)
 		if err == nil {
 			return v, nil
 		}
@@ -89,6 +107,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 			t.Stop()
 			return nilT, ctx.Err()
 		case <-t.C:
+			retries++
 			continue
 		}
 	}

@@ -115,7 +115,7 @@ also write custom middleware.
 
 ### Jitter
 
-To reduce the changes of a thundering herd, add random jitter to the returned
+To reduce the chances of a thundering herd, add random jitter to the returned
 value.
 
 ```golang

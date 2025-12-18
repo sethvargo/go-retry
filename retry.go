@@ -56,7 +56,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		// Return immediately if ctx is canceled
 		select {
 		case <-ctx.Done():
-			return nilT, ctx.Err()
+			return nilT, context.Cause(ctx)
 		default:
 		}
 
@@ -79,7 +79,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		// ctx.Done() has priority, so we test it alone first
 		select {
 		case <-ctx.Done():
-			return nilT, ctx.Err()
+			return nilT, context.Cause(ctx)
 		default:
 		}
 
@@ -87,7 +87,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		select {
 		case <-ctx.Done():
 			t.Stop()
-			return nilT, ctx.Err()
+			return nilT, context.Cause(ctx)
 		case <-t.C:
 			continue
 		}

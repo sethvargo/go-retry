@@ -22,6 +22,20 @@ func TestRetryableError(t *testing.T) {
 	}
 }
 
+func TestIsRetryable(t *testing.T) {
+	t.Parallel()
+
+	err1 := retry.RetryableError(fmt.Errorf("retryable"))
+	if !retry.IsRetryable(err1) {
+		t.Errorf("expected error to be retryable")
+	}
+
+	err2 := fmt.Errorf("not retryable")
+	if retry.IsRetryable(err2) {
+		t.Errorf("expected error to not be retryable")
+	}
+}
+
 func TestDoValue(t *testing.T) {
 	t.Parallel()
 

@@ -49,6 +49,12 @@ func (e *retryableError) Error() string {
 	return "retryable: " + e.err.Error()
 }
 
+// IsRetryable returns true if the error is marked as retryable.
+func IsRetryable(err error) bool {
+	var rerr *retryableError
+	return errors.As(err, &rerr)
+}
+
 func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
 	var nilT T
 

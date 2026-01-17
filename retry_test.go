@@ -149,6 +149,37 @@ func TestDo(t *testing.T) {
 			t.Errorf("expected %v to be %v", err, context.DeadlineExceeded)
 		}
 	})
+
+	t.Run("deadline_exceeded", func(t *testing.T) {
+		t.Parallel()
+
+		// This test verifies that the Do function immediately respects the context
+		// deadline, even if the backoff duration is significantly longer than the
+		// remaining context time. This is critical to ensure that the application
+		// does not hang or wait unnecessarily when the context has already
+		// expired.
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+		defer cancel()
+
+		// Backoff is longer than context timeout
+		b := retry.NewConstant(20 * time.Millisecond)
+
+		start := time.Now()
+		err := retry.Do(ctx, b, func(_ context.Context) error {
+			return retry.RetryableError(fmt.Errorf("oops"))
+		})
+		if err == nil {
+			t.Fatal("expected err")
+		}
+		if got, want := err, context.DeadlineExceeded; got != want {
+			t.Errorf("expected %v to be %v", got, want)
+		}
+
+		// Should have returned roughly around the timeout, not the backoff
+		if took := time.Since(start); took > 15*time.Millisecond {
+			t.Errorf("took %v, expected < 15ms", took)
+		}
+	})
 }
 
 func ExampleDo_simple() {

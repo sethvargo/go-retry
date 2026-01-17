@@ -126,6 +126,24 @@ func TestWithMaxRetries(t *testing.T) {
 	}
 }
 
+func TestWithMaxRetries_Zero(t *testing.T) {
+	t.Parallel()
+
+	// This test verifies the behavior of WithMaxRetries when the maximum number
+	// of retries is set to 0.
+	b := retry.WithMaxRetries(0, retry.BackoffFunc(func() (time.Duration, bool) {
+		return 1 * time.Second, false
+	}))
+
+	val, stop := b.Next()
+	if !stop {
+		t.Errorf("should stop")
+	}
+	if val != 0 {
+		t.Errorf("expected %v to be %v", val, 0)
+	}
+}
+
 func ExampleWithMaxRetries() {
 	ctx := context.Background()
 

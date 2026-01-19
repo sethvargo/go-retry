@@ -176,8 +176,8 @@ func TestDo(t *testing.T) {
 		}
 
 		// Should have returned roughly around the timeout, not the backoff
-		if took := time.Since(start); took > 15*time.Millisecond {
-			t.Errorf("took %v, expected < 15ms", took)
+		if got, want := time.Since(start), 15*time.Millisecond; got > want {
+			t.Errorf("expected %s to be less than %s", got, want)
 		}
 	})
 }

@@ -52,6 +52,21 @@ func TestWithJitter(t *testing.T) {
 	}
 }
 
+func TestWithJitter_Zero(t *testing.T) {
+	t.Parallel()
+
+	b := retry.WithJitter(0, retry.BackoffFunc(func() (time.Duration, bool) {
+		return 1 * time.Second, false
+	}))
+	val, stop := b.Next()
+	if stop {
+		t.Errorf("should not stop")
+	}
+	if val != 1*time.Second {
+		t.Errorf("expected %v to be %v", val, 1*time.Second)
+	}
+}
+
 func ExampleWithJitter() {
 	ctx := context.Background()
 
@@ -81,6 +96,21 @@ func TestWithJitterPercent(t *testing.T) {
 		if min, max := 950*time.Millisecond, 1050*time.Millisecond; val < min || val > max {
 			t.Errorf("expected %v to be between %v and %v", val, min, max)
 		}
+	}
+}
+
+func TestWithJitterPercent_Zero(t *testing.T) {
+	t.Parallel()
+
+	b := retry.WithJitterPercent(0, retry.BackoffFunc(func() (time.Duration, bool) {
+		return 1 * time.Second, false
+	}))
+	val, stop := b.Next()
+	if stop {
+		t.Errorf("should not stop")
+	}
+	if val != 1*time.Second {
+		t.Errorf("expected %v to be %v", val, 1*time.Second)
 	}
 }
 

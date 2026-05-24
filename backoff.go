@@ -34,6 +34,10 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
+		if j <= 0 {
+			return val, false
+		}
+
 		diff := time.Duration(r.Int63n(int64(j)*2) - int64(j))
 		val = val + diff
 		if val < 0 {
@@ -54,6 +58,10 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		val, stop := next.Next()
 		if stop {
 			return 0, true
+		}
+
+		if j == 0 {
+			return val, false
 		}
 
 		// Get a value between -j and j, the convert to a percentage

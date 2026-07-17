@@ -126,6 +126,9 @@ b = WithJitter(500*time.Millisecond, b)
 
 // Return the next value, +/- 5% of the result
 b = WithJitterPercent(5, b)
+
+// Return a random value in [0, next value)
+b = WithFullJitter(b)
 ```
 
 ### MaxRetries

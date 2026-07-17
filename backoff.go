@@ -34,6 +34,13 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
+		// A jitter of zero (or negative) is a no-op. Guard it explicitly:
+		// Int63n panics when its argument is <= 0, so without this a caller
+		// passing WithJitter(0, ...) would crash on the first attempt.
+		if j <= 0 {
+			return val, false
+		}
+
 		diff := time.Duration(r.Int63n(int64(j)*2) - int64(j))
 		val = val + diff
 		if val < 0 {
@@ -54,6 +61,13 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		val, stop := next.Next()
 		if stop {
 			return 0, true
+		}
+
+		// A jitter of zero is a no-op. Guard it explicitly: Int63n panics
+		// when its argument is <= 0, so WithJitterPercent(0, ...) would
+		// otherwise crash on the first attempt.
+		if j == 0 {
+			return val, false
 		}
 
 		// Get a value between -j and j, the convert to a percentage

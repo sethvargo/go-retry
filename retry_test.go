@@ -22,6 +22,41 @@ func TestRetryableError(t *testing.T) {
 	}
 }
 
+func TestRetryableError_nil(t *testing.T) {
+	t.Parallel()
+
+	if got := retry.RetryableError(nil); got != nil {
+		t.Errorf("expected nil, got %v", got)
+	}
+}
+
+func TestIsRetryable(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		err  error
+		exp  bool
+	}{
+		{"retryable", retry.RetryableError(fmt.Errorf("retryable")), true},
+		{"wrapped_retryable", fmt.Errorf("wrap: %w", retry.RetryableError(fmt.Errorf("inner"))), true},
+		{"not_retryable", fmt.Errorf("not retryable"), false},
+		{"nil", nil, false},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if got := retry.IsRetryable(tc.err); got != tc.exp {
+				t.Errorf("IsRetryable(%v) = %t, want %t", tc.err, got, tc.exp)
+			}
+		})
+	}
+}
+
 func TestDoValue(t *testing.T) {
 	t.Parallel()
 
@@ -281,7 +316,7 @@ func TestCancel(t *testing.T) {
 
 		// Here we cancel the Context *before* the call to Do
 		cancel()
-		retry.Do(ctx, b, rf)
+		_ = retry.Do(ctx, b, rf)
 
 		if calls > 1 {
 			t.Errorf("rf was called %d times instead of 0 or 1", calls)

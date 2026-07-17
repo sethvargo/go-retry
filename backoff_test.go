@@ -66,6 +66,37 @@ func ExampleWithJitter() {
 	}
 }
 
+func TestWithJitter_zero(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		j    time.Duration
+	}{
+		{"zero", 0},
+		{"negative", -5 * time.Second},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Regression: a zero (or negative) jitter must not panic; Int63n
+			// panics when its argument is <= 0. The backoff value is unchanged.
+			b := retry.WithJitter(tc.j, retry.NewConstant(1*time.Second))
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != 1*time.Second {
+				t.Errorf("expected 1s (unchanged), got %v", val)
+			}
+		})
+	}
+}
+
 func TestWithJitterPercent(t *testing.T) {
 	t.Parallel()
 
@@ -95,6 +126,36 @@ func ExampleWithJitterPercent() {
 		return nil
 	}); err != nil {
 		// handle error
+	}
+}
+
+func TestWithJitterPercent_zero(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		j    uint64
+	}{
+		{"zero", 0},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// Regression: a zero jitter percent must not panic; Int63n panics
+			// when its argument is <= 0. The backoff value is unchanged.
+			b := retry.WithJitterPercent(tc.j, retry.NewConstant(1*time.Second))
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != 1*time.Second {
+				t.Errorf("expected 1s (unchanged), got %v", val)
+			}
+		})
 	}
 }
 
@@ -207,7 +268,7 @@ func TestWithMaxDuration(t *testing.T) {
 
 	time.Sleep(200 * time.Millisecond)
 
-	// Take again, remainder contines
+	// Take again, remainder continues
 	val, stop = b.Next()
 	if stop {
 		t.Error("should not stop")

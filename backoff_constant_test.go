@@ -1,14 +1,72 @@
+// The retry-loop tests below use the testing/synctest package (GA in Go 1.25)
+// to drive the loop's inter-attempt sleeps against a fake clock, making them
+// deterministic and instant instead of relying on real time.
+// Background and rationale: https://go.dev/blog/testing-time
+
 package retry_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sethvargo/go-retry"
 )
+
+func TestConstant(t *testing.T) {
+	t.Parallel()
+
+	// The retry loop sleeps between attempts, so run it in a synctest bubble
+	// (see the file header) rather than dodging real time with a tiny base.
+	synctest.Test(t, func(t *testing.T) {
+		var calls int
+		err := retry.Constant(t.Context(), 1*time.Second, func(_ context.Context) error {
+			calls++
+			if calls < 3 {
+				return retry.RetryableError(errors.New("again"))
+			}
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if calls != 3 {
+			t.Errorf("expected 3 calls, got %d", calls)
+		}
+	})
+}
+
+func TestNewConstant_panics(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		base time.Duration
+	}{
+		{"zero", 0},
+		{"negative", -1},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			defer func() {
+				if r := recover(); r == nil {
+					t.Error("expected panic, got none")
+				}
+			}()
+			retry.NewConstant(tc.base)
+		})
+	}
+}
 
 func TestConstantBackoff(t *testing.T) {
 	t.Parallel()

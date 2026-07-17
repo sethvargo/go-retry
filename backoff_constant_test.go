@@ -1,6 +1,8 @@
 package retry_test
 
 import (
+	"context"
+	"errors"
 	"fmt"
 	"reflect"
 	"slices"
@@ -107,4 +109,47 @@ func ExampleNewConstant() {
 	// 1s
 	// 1s
 	// 1s
+}
+
+func TestConstant(t *testing.T) {
+	t.Parallel()
+
+	calls := 0
+	if err := retry.Constant(context.Background(), 1*time.Nanosecond, func(_ context.Context) error {
+		calls++
+		if calls < 3 {
+			return retry.RetryableError(errors.New("retry"))
+		}
+		return nil
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if calls != 3 {
+		t.Errorf("expected %d to be %d", calls, 3)
+	}
+}
+
+func TestNewConstant_panics(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		base time.Duration
+	}{
+		{name: "zero", base: 0},
+		{name: "negative", base: -1 * time.Second},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			defer func() {
+				if recover() == nil {
+					t.Errorf("expected panic")
+				}
+			}()
+			retry.NewConstant(tc.base)
+		})
+	}
 }

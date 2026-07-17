@@ -84,11 +84,10 @@ func TestWithJitter_NonPositive(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// A non-positive jitter must not panic (Int63n panics on a
+			// A non-positive jitter must not panic (rand.Int64N panics on a
 			// non-positive argument) and must return the underlying value
 			// unchanged.
 			b := retry.WithJitter(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
@@ -165,11 +164,10 @@ func TestWithJitterPercent_Zero(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			// A zero jitter must not panic (Int63n panics on a non-positive
+			// A zero jitter must not panic (rand.Int64N panics on a non-positive
 			// argument) and must return the underlying value unchanged.
 			b := retry.WithJitterPercent(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
 				return tc.nextVal, tc.nextStop

@@ -69,14 +69,13 @@ func TestExponentialBackoff(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			b := retry.NewExponential(tc.base)
 
 			resultsCh := make(chan time.Duration, tc.tries)
-			for i := 0; i < tc.tries; i++ {
+			for range tc.tries {
 				go func() {
 					r, _ := b.Next()
 					resultsCh <- r
@@ -114,4 +113,48 @@ func ExampleNewExponential() {
 	// 4s
 	// 8s
 	// 16s
+}
+
+func TestExponentialBackoff_ConcurrentOverflow(t *testing.T) {
+	t.Parallel()
+
+	// Many concurrent Next calls on an overflow-prone base must never observe a
+	// value outside the doubling sequence or MaxInt64. A racy attempt counter
+	// lets the shift run past the overflow point and wrap to a bogus positive.
+	const tries = 100
+	base := 100_000 * time.Hour
+
+	b := retry.NewExponential(base)
+
+	resultsCh := make(chan time.Duration, tries)
+	for range tries {
+		go func() {
+			r, _ := b.Next()
+			resultsCh <- r
+		}()
+	}
+
+	results := make([]time.Duration, tries)
+	for i := range tries {
+		select {
+		case val := <-resultsCh:
+			results[i] = val
+		case <-time.After(5 * time.Second):
+			t.Fatal("timeout")
+		}
+	}
+	slices.Sort(results)
+
+	want := make([]time.Duration, 0, tries)
+	for next := base; next > 0; next <<= 1 {
+		want = append(want, next)
+	}
+	for len(want) < tries {
+		want = append(want, math.MaxInt64)
+	}
+	slices.Sort(want)
+
+	if !reflect.DeepEqual(results, want) {
+		t.Errorf("expected \n\n%v\n\n to be \n\n%v\n\n", results, want)
+	}
 }

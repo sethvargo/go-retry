@@ -60,7 +60,7 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if j == 0 {
+		if j <= 0 {
 			return val, false
 		}
 

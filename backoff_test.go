@@ -37,7 +37,7 @@ func ExampleBackoffFunc() {
 func TestWithJitter(t *testing.T) {
 	t.Parallel()
 
-	for i := 0; i < 100_000; i++ {
+	for range 100_000 {
 		b := retry.WithJitter(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
 			return 1 * time.Second, false
 		}))
@@ -84,7 +84,6 @@ func TestWithJitter_NonPositive(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -124,7 +123,7 @@ func ExampleWithJitter() {
 func TestWithJitterPercent(t *testing.T) {
 	t.Parallel()
 
-	for i := 0; i < 100_000; i++ {
+	for range 100_000 {
 		b := retry.WithJitterPercent(5, retry.BackoffFunc(func() (time.Duration, bool) {
 			return 1 * time.Second, false
 		}))
@@ -166,7 +165,6 @@ func TestWithJitterPercent_Zero(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -210,7 +208,7 @@ func TestWithMaxRetries(t *testing.T) {
 	}))
 
 	// First 3 attempts succeed
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		val, stop := b.Next()
 		if stop {
 			t.Errorf("should not stop")

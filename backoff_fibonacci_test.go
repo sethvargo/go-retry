@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"sort"
+	"slices"
 	"testing"
 	"time"
 
@@ -81,7 +81,6 @@ func TestFibonacciBackoff(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-		tc := tc
 
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
@@ -105,9 +104,7 @@ func TestFibonacciBackoff(t *testing.T) {
 					t.Fatal("timeout")
 				}
 			}
-			sort.Slice(results, func(i, j int) bool {
-				return results[i] < results[j]
-			})
+			slices.Sort(results)
 
 			if !reflect.DeepEqual(results, tc.exp) {
 				t.Errorf("expected \n\n%v\n\n to be \n\n%v\n\n", results, tc.exp)
@@ -119,7 +116,7 @@ func TestFibonacciBackoff(t *testing.T) {
 func ExampleNewFibonacci() {
 	b := retry.NewFibonacci(1 * time.Second)
 
-	for i := 0; i < 5; i++ {
+	for range 5 {
 		val, _ := b.Next()
 		fmt.Printf("%v\n", val)
 	}

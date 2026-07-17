@@ -9,7 +9,7 @@ import (
 
 type exponentialBackoff struct {
 	base    time.Duration
-	attempt uint64
+	attempt atomic.Uint64
 }
 
 // Exponential is a wrapper around Retry that uses an exponential backoff. See
@@ -37,9 +37,9 @@ func NewExponential(base time.Duration) Backoff {
 
 // Next implements Backoff. It is safe for concurrent use.
 func (b *exponentialBackoff) Next() (time.Duration, bool) {
-	next := b.base << (atomic.AddUint64(&b.attempt, 1) - 1)
+	next := b.base << (b.attempt.Add(1) - 1)
 	if next <= 0 {
-		atomic.AddUint64(&b.attempt, ^uint64(0))
+		b.attempt.Add(^uint64(0))
 		next = math.MaxInt64
 	}
 

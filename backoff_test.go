@@ -52,6 +52,61 @@ func TestWithJitter(t *testing.T) {
 	}
 }
 
+func TestWithJitter_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		j        time.Duration
+		nextVal  time.Duration
+		nextStop bool
+		wantVal  time.Duration
+		wantStop bool
+	}{
+		{
+			name:    "zero",
+			j:       0,
+			nextVal: 1 * time.Second,
+			wantVal: 1 * time.Second,
+		},
+		{
+			name:    "negative",
+			j:       -5 * time.Second,
+			nextVal: 1 * time.Second,
+			wantVal: 1 * time.Second,
+		},
+		{
+			name:     "stop_propagates",
+			j:        0,
+			nextStop: true,
+			wantStop: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// A non-positive jitter must not panic (Int63n panics on a
+			// non-positive argument) and must return the underlying value
+			// unchanged.
+			b := retry.WithJitter(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+				return tc.nextVal, tc.nextStop
+			}))
+
+			val, stop := b.Next()
+			if stop != tc.wantStop {
+				t.Errorf("expected stop to be %t", tc.wantStop)
+			}
+			if val != tc.wantVal {
+				t.Errorf("expected %v to be %v", val, tc.wantVal)
+			}
+		})
+	}
+}
+
 func ExampleWithJitter() {
 	ctx := context.Background()
 
@@ -81,6 +136,55 @@ func TestWithJitterPercent(t *testing.T) {
 		if min, max := 950*time.Millisecond, 1050*time.Millisecond; val < min || val > max {
 			t.Errorf("expected %v to be between %v and %v", val, min, max)
 		}
+	}
+}
+
+func TestWithJitterPercent_Zero(t *testing.T) {
+	t.Parallel()
+
+	// j is a uint64, so zero is the only non-positive value it can hold.
+	cases := []struct {
+		name     string
+		j        uint64
+		nextVal  time.Duration
+		nextStop bool
+		wantVal  time.Duration
+		wantStop bool
+	}{
+		{
+			name:    "zero",
+			j:       0,
+			nextVal: 1 * time.Second,
+			wantVal: 1 * time.Second,
+		},
+		{
+			name:     "stop_propagates",
+			j:        0,
+			nextStop: true,
+			wantStop: true,
+		},
+	}
+
+	for _, tc := range cases {
+		tc := tc
+
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// A zero jitter must not panic (Int63n panics on a non-positive
+			// argument) and must return the underlying value unchanged.
+			b := retry.WithJitterPercent(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+				return tc.nextVal, tc.nextStop
+			}))
+
+			val, stop := b.Next()
+			if stop != tc.wantStop {
+				t.Errorf("expected stop to be %t", tc.wantStop)
+			}
+			if val != tc.wantVal {
+				t.Errorf("expected %v to be %v", val, tc.wantVal)
+			}
+		})
 	}
 }
 

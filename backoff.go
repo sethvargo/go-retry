@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"math/rand/v2"
 	"sync"
 	"time"
 )
@@ -26,8 +27,6 @@ func (b BackoffFunc) Next() (time.Duration, bool) {
 // returned 20s, the value could be between 15 and 25 seconds. The value can
 // never be less than 0.
 func WithJitter(j time.Duration, next Backoff) Backoff {
-	r := newLockedRandom(time.Now().UnixNano())
-
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
@@ -38,11 +37,8 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 			return val, false
 		}
 
-		diff := time.Duration(r.Int63n(int64(j)*2) - int64(j))
-		val = val + diff
-		if val < 0 {
-			val = 0
-		}
+		diff := time.Duration(rand.Int64N(int64(j)*2) - int64(j))
+		val = max(val+diff, 0)
 		return val, false
 	})
 }
@@ -52,8 +48,6 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 // the backoff returned 20s, the value could be between 19 and 21 seconds. The
 // value can never be less than 0 or greater than 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
-	r := newLockedRandom(time.Now().UnixNano())
-
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
@@ -65,13 +59,10 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		}
 
 		// Get a value between -j and j, the convert to a percentage
-		top := r.Int63n(int64(j)*2) - int64(j)
+		top := rand.Int64N(int64(j)*2) - int64(j)
 		pct := 1 - float64(top)/100.0
 
-		val = time.Duration(float64(val) * pct)
-		if val < 0 {
-			val = 0
-		}
+		val = max(time.Duration(float64(val)*pct), 0)
 		return val, false
 	})
 }

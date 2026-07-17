@@ -198,6 +198,86 @@ func ExampleWithJitterPercent() {
 	}
 }
 
+func TestWithFullJitter(t *testing.T) {
+	t.Parallel()
+
+	for range 100_000 {
+		b := retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) {
+			return 1 * time.Second, false
+		}))
+		val, stop := b.Next()
+		if stop {
+			t.Errorf("should not stop")
+		}
+
+		if min, max := time.Duration(0), 1*time.Second; val < min || val >= max {
+			t.Errorf("expected %v to be in [%v, %v)", val, min, max)
+		}
+	}
+}
+
+func TestWithFullJitter_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name     string
+		nextVal  time.Duration
+		nextStop bool
+		wantVal  time.Duration
+		wantStop bool
+	}{
+		{
+			name:    "zero",
+			nextVal: 0,
+			wantVal: 0,
+		},
+		{
+			name:    "negative",
+			nextVal: -5 * time.Second,
+			wantVal: -5 * time.Second,
+		},
+		{
+			name:     "stop_propagates",
+			nextStop: true,
+			wantStop: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			// A non-positive base must not panic (rand.Int64N panics on a
+			// non-positive argument) and must return the value unchanged.
+			b := retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) {
+				return tc.nextVal, tc.nextStop
+			}))
+
+			val, stop := b.Next()
+			if stop != tc.wantStop {
+				t.Errorf("expected stop to be %t", tc.wantStop)
+			}
+			if val != tc.wantVal {
+				t.Errorf("expected %v to be %v", val, tc.wantVal)
+			}
+		})
+	}
+}
+
+func ExampleWithFullJitter() {
+	ctx := context.Background()
+
+	b := retry.NewFibonacci(1 * time.Second)
+	b = retry.WithFullJitter(b)
+
+	if err := retry.Do(ctx, b, func(_ context.Context) error {
+		// TODO: logic here
+		return nil
+	}); err != nil {
+		// handle error
+	}
+}
+
 func TestWithMaxRetries(t *testing.T) {
 	t.Parallel()
 

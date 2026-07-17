@@ -69,14 +69,13 @@ func TestExponentialBackoff(t *testing.T) {
 	}
 
 	for _, tc := range cases {
-
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
 			b := retry.NewExponential(tc.base)
 
 			resultsCh := make(chan time.Duration, tc.tries)
-			for i := 0; i < tc.tries; i++ {
+			for range tc.tries {
 				go func() {
 					r, _ := b.Next()
 					resultsCh <- r

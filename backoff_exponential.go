@@ -37,11 +37,15 @@ func NewExponential(base time.Duration) Backoff {
 
 // Next implements Backoff. It is safe for concurrent use.
 func (b *exponentialBackoff) Next() (time.Duration, bool) {
-	next := b.base << (b.attempt.Add(1) - 1)
-	if next <= 0 {
-		b.attempt.Add(^uint64(0))
-		next = math.MaxInt64
-	}
+	for {
+		attempt := b.attempt.Load()
+		next := b.base << attempt
+		if next <= 0 {
+			return math.MaxInt64, false
+		}
 
-	return next, false
+		if b.attempt.CompareAndSwap(attempt, attempt+1) {
+			return next, false
+		}
+	}
 }

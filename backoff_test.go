@@ -184,6 +184,39 @@ func TestWithJitterPercent_Zero(t *testing.T) {
 	}
 }
 
+func TestWithJitterPercent_AboveHundred(t *testing.T) {
+	t.Parallel()
+
+	// The documented ceiling is 100; above it the percentage went negative, so
+	// the backoff collapsed to zero and int64(j)*2 eventually overflowed.
+	cases := []struct {
+		name string
+		j    uint64
+	}{
+		{name: "just_above", j: 101},
+		{name: "double", j: 200},
+		{name: "overflows_int64", j: 1 << 62},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithJitterPercent(tc.j, retry.NewConstant(1*time.Second))
+
+			for range 10000 {
+				val, stop := b.Next()
+				if stop {
+					t.Fatalf("should not stop")
+				}
+				if val <= 0 {
+					t.Fatalf("expected a positive backoff, got %v", val)
+				}
+			}
+		})
+	}
+}
+
 func ExampleWithJitterPercent() {
 	ctx := context.Background()
 

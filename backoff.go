@@ -1,6 +1,7 @@
 package retry
 
 import (
+	"math"
 	"math/rand/v2"
 	"sync"
 	"time"
@@ -25,7 +26,7 @@ func (b BackoffFunc) Next() (time.Duration, bool) {
 // WithJitter wraps a backoff function and adds the specified jitter. j can be
 // interpreted as "+/- j". For example, if j were 5 seconds and the backoff
 // returned 20s, the value could be between 15 and 25 seconds. The value can
-// never be less than 0.
+// never be less than 0 or greater than the maximum time.Duration.
 func WithJitter(j time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
@@ -37,7 +38,14 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 			return val, false
 		}
 
-		diff := time.Duration(rand.Int64N(int64(j)*2) - int64(j))
+		// The unsigned bound fits even when twice j exceeds MaxInt64.
+		diff := time.Duration(rand.Uint64N(uint64(j)*2) - uint64(j))
+		if diff > 0 && val > math.MaxInt64-diff {
+			return math.MaxInt64, false
+		}
+		if diff < 0 && val < -diff {
+			return 0, false
+		}
 		val = max(val+diff, 0)
 		return val, false
 	})
@@ -65,7 +73,14 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		top := rand.Int64N(int64(j)*2) - int64(j)
 		pct := 1 - float64(top)/100.0
 
-		val = max(time.Duration(float64(val)*pct), 0)
+		result := float64(val) * pct
+		if result >= math.MaxInt64 {
+			return math.MaxInt64, false
+		}
+		if result <= 0 {
+			return 0, false
+		}
+		val = time.Duration(result)
 		return val, false
 	})
 }

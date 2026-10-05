@@ -97,7 +97,7 @@ func TestFibonacciBackoff(t *testing.T) {
 			}
 
 			results := make([]time.Duration, tc.tries)
-			for i := 0; i < tc.tries; i++ {
+			for i := range tc.tries {
 				select {
 				case val := <-resultsCh:
 					results[i] = val

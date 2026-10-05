@@ -259,7 +259,7 @@ func ExampleDoValue() {
 }
 
 func TestCancel(t *testing.T) {
-	for range 100000 {
+	for range 100_000 {
 		ctx, cancel := context.WithCancel(context.Background())
 
 		calls := 0

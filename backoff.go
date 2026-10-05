@@ -147,7 +147,7 @@ func WithCappedDuration(cap time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if val <= 0 || val > cap {
+		if val > cap {
 			val = cap
 		}
 		return val, false
@@ -171,7 +171,7 @@ func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if val <= 0 || val > diff {
+		if val > diff {
 			val = diff
 		}
 		return val, false

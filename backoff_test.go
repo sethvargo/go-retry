@@ -583,3 +583,59 @@ func ExampleWithMaxDuration() {
 		// handle error
 	}
 }
+
+func TestWithCappedDuration_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	// A zero backoff is a legitimate value (WithFullJitter can return 0). The cap
+	// bounds the maximum, so it must pass a zero through unchanged rather than
+	// inflate it to the cap.
+	b := retry.WithCappedDuration(5*time.Second, retry.BackoffFunc(func() (time.Duration, bool) {
+		return 0, false
+	}))
+
+	val, stop := b.Next()
+	if stop {
+		t.Fatal("should not stop")
+	}
+	if val != 0 {
+		t.Errorf("expected %v to be %v", val, time.Duration(0))
+	}
+}
+
+func TestWithCappedDuration_FullJitter(t *testing.T) {
+	t.Parallel()
+
+	// WithFullJitter(1ns) always returns 0. Capping it must preserve the zero,
+	// not turn the smallest wait into the largest.
+	b := retry.WithCappedDuration(5*time.Second, retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) {
+		return 1 * time.Nanosecond, false
+	})))
+
+	for range 1_000 {
+		val, stop := b.Next()
+		if stop {
+			t.Fatal("should not stop")
+		}
+		if val != 0 {
+			t.Errorf("expected %v to be %v", val, time.Duration(0))
+		}
+	}
+}
+
+func TestWithMaxDuration_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	// A zero backoff must stay zero, not expand to the entire remaining budget.
+	b := retry.WithMaxDuration(10*time.Second, retry.BackoffFunc(func() (time.Duration, bool) {
+		return 0, false
+	}))
+
+	val, stop := b.Next()
+	if stop {
+		t.Fatal("should not stop")
+	}
+	if val != 0 {
+		t.Errorf("expected %v to be %v", val, time.Duration(0))
+	}
+}

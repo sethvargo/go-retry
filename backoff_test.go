@@ -23,7 +23,7 @@ func ExampleBackoffFunc() {
 		}
 	}
 
-	// Middlewrap wrap another backoff:
+	// Middleware wraps another backoff:
 	b := retry.NewFibonacci(1 * time.Second)
 	b = withShift(5*time.Second, b)
 

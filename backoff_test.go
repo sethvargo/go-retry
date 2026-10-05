@@ -587,55 +587,71 @@ func ExampleWithMaxDuration() {
 func TestWithCappedDuration_NonPositive(t *testing.T) {
 	t.Parallel()
 
-	// A zero backoff is a legitimate value (WithFullJitter can return 0). The cap
-	// bounds the maximum, so it must pass a zero through unchanged rather than
-	// inflate it to the cap.
-	b := retry.WithCappedDuration(5*time.Second, retry.BackoffFunc(func() (time.Duration, bool) {
-		return 0, false
-	}))
-
-	val, stop := b.Next()
-	if stop {
-		t.Fatal("should not stop")
+	cases := []struct {
+		name    string
+		cap     time.Duration
+		backoff retry.Backoff
+		want    time.Duration
+	}{
+		{
+			name:    "zero",
+			cap:     5 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
+			want:    0,
+		},
+		{
+			name:    "full_jitter",
+			cap:     5 * time.Second,
+			backoff: retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Nanosecond, false })),
+			want:    0,
+		},
 	}
-	if val != 0 {
-		t.Errorf("expected %v to be %v", val, time.Duration(0))
-	}
-}
 
-func TestWithCappedDuration_FullJitter(t *testing.T) {
-	t.Parallel()
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
 
-	// WithFullJitter(1ns) always returns 0. Capping it must preserve the zero,
-	// not turn the smallest wait into the largest.
-	b := retry.WithCappedDuration(5*time.Second, retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) {
-		return 1 * time.Nanosecond, false
-	})))
-
-	for range 1_000 {
-		val, stop := b.Next()
-		if stop {
-			t.Fatal("should not stop")
-		}
-		if val != 0 {
-			t.Errorf("expected %v to be %v", val, time.Duration(0))
-		}
+			b := retry.WithCappedDuration(tc.cap, tc.backoff)
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != tc.want {
+				t.Errorf("expected %v to be %v", val, tc.want)
+			}
+		})
 	}
 }
 
 func TestWithMaxDuration_NonPositive(t *testing.T) {
 	t.Parallel()
 
-	// A zero backoff must stay zero, not expand to the entire remaining budget.
-	b := retry.WithMaxDuration(10*time.Second, retry.BackoffFunc(func() (time.Duration, bool) {
-		return 0, false
-	}))
-
-	val, stop := b.Next()
-	if stop {
-		t.Fatal("should not stop")
+	cases := []struct {
+		name    string
+		timeout time.Duration
+		backoff retry.Backoff
+		want    time.Duration
+	}{
+		{
+			name:    "zero",
+			timeout: 10 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
+			want:    0,
+		},
 	}
-	if val != 0 {
-		t.Errorf("expected %v to be %v", val, time.Duration(0))
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithMaxDuration(tc.timeout, tc.backoff)
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != tc.want {
+				t.Errorf("expected %v to be %v", val, tc.want)
+			}
+		})
 	}
 }

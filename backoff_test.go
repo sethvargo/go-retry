@@ -332,7 +332,7 @@ func TestWithJitterPercent_AboveHundred(t *testing.T) {
 
 			b := retry.WithJitterPercent(tc.j, retry.NewConstant(1*time.Second))
 
-			for range 10000 {
+			for range 10_000 {
 				val, stop := b.Next()
 				if stop {
 					t.Fatalf("should not stop")

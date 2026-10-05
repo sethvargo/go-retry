@@ -583,3 +583,75 @@ func ExampleWithMaxDuration() {
 		// handle error
 	}
 }
+
+func TestWithCappedDuration_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		cap     time.Duration
+		backoff retry.Backoff
+		want    time.Duration
+	}{
+		{
+			name:    "zero",
+			cap:     5 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
+			want:    0,
+		},
+		{
+			name:    "full_jitter",
+			cap:     5 * time.Second,
+			backoff: retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Nanosecond, false })),
+			want:    0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithCappedDuration(tc.cap, tc.backoff)
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != tc.want {
+				t.Errorf("expected %v to be %v", val, tc.want)
+			}
+		})
+	}
+}
+
+func TestWithMaxDuration_NonPositive(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name    string
+		timeout time.Duration
+		backoff retry.Backoff
+		want    time.Duration
+	}{
+		{
+			name:    "zero",
+			timeout: 10 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
+			want:    0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithMaxDuration(tc.timeout, tc.backoff)
+			val, stop := b.Next()
+			if stop {
+				t.Fatal("should not stop")
+			}
+			if val != tc.want {
+				t.Errorf("expected %v to be %v", val, tc.want)
+			}
+		})
+	}
+}

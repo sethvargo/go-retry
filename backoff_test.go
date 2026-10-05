@@ -2,6 +2,7 @@ package retry_test
 
 import (
 	"context"
+	"math"
 	"testing"
 	"time"
 
@@ -119,6 +120,80 @@ func ExampleWithJitter() {
 	}
 }
 
+func TestWithJitter_DurationLimits(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		j    time.Duration
+		val  time.Duration
+		min  time.Duration
+		max  time.Duration
+	}{
+		{
+			name: "saturated_backoff",
+			j:    2,
+			val:  math.MaxInt64,
+			min:  math.MaxInt64 - 2,
+			max:  math.MaxInt64,
+		},
+		{
+			name: "largest_signed_random_bound",
+			j:    math.MaxInt64 / 2,
+			val:  math.MaxInt64,
+			min:  math.MaxInt64 - math.MaxInt64/2,
+			max:  math.MaxInt64,
+		},
+		{
+			name: "random_bound_overflow",
+			j:    1 << 62,
+			val:  math.MaxInt64,
+			min:  math.MaxInt64 - (1 << 62),
+			max:  math.MaxInt64,
+		},
+		{
+			name: "maximum_jitter",
+			j:    math.MaxInt64,
+			val:  0,
+			min:  0,
+			max:  math.MaxInt64 - 1,
+		},
+		{
+			name: "maximum_jitter_and_backoff",
+			j:    math.MaxInt64,
+			val:  math.MaxInt64,
+			min:  0,
+			max:  math.MaxInt64,
+		},
+		{
+			name: "negative_backoff",
+			j:    math.MaxInt64,
+			val:  math.MinInt64,
+			min:  0,
+			max:  0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithJitter(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+				return tc.val, false
+			}))
+			for range 1_000 {
+				val, stop := b.Next()
+				if stop {
+					t.Fatal("should not stop")
+				}
+				if val < tc.min || val > tc.max {
+					t.Fatalf("expected %v to be between %v and %v", val, tc.min, tc.max)
+				}
+			}
+		})
+	}
+}
+
 func TestWithJitterPercent(t *testing.T) {
 	t.Parallel()
 
@@ -134,6 +209,59 @@ func TestWithJitterPercent(t *testing.T) {
 		if min, max := 950*time.Millisecond, 1050*time.Millisecond; val < min || val > max {
 			t.Errorf("expected %v to be between %v and %v", val, min, max)
 		}
+	}
+}
+
+func TestWithJitterPercent_DurationLimits(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name string
+		j    uint64
+		val  time.Duration
+		min  time.Duration
+		max  time.Duration
+	}{
+		{
+			name: "saturated_backoff",
+			j:    1,
+			val:  math.MaxInt64,
+			min:  math.MaxInt64,
+			max:  math.MaxInt64,
+		},
+		{
+			name: "maximum_percentage",
+			j:    100,
+			val:  math.MaxInt64,
+			min:  math.MaxInt64 / 100,
+			max:  math.MaxInt64,
+		},
+		{
+			name: "negative_backoff",
+			j:    100,
+			val:  math.MinInt64,
+			min:  0,
+			max:  0,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			b := retry.WithJitterPercent(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+				return tc.val, false
+			}))
+			for range 1_000 {
+				val, stop := b.Next()
+				if stop {
+					t.Fatal("should not stop")
+				}
+				if val < tc.min || val > tc.max {
+					t.Fatalf("expected %v to be between %v and %v", val, tc.min, tc.max)
+				}
+			}
+		})
 	}
 }
 

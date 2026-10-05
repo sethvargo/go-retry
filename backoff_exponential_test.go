@@ -118,40 +118,19 @@ func TestExponentialBackoff_Next(t *testing.T) {
 	}
 }
 
-func TestNewExponential(t *testing.T) {
-	t.Parallel()
+func ExampleNewExponential() {
+	b := retry.NewExponential(1 * time.Second)
 
-	cases := []struct {
-		name      string
-		base      time.Duration
-		wantPanic bool
-	}{
-		{
-			name:      "panics_on_zero",
-			base:      0,
-			wantPanic: true,
-		},
-		{
-			name:      "panics_on_negative",
-			base:      -1 * time.Second,
-			wantPanic: true,
-		},
+	for range 5 {
+		val, _ := b.Next()
+		fmt.Printf("%v\n", val)
 	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			if tc.wantPanic {
-				defer func() {
-					if recover() == nil {
-						t.Errorf("expected panic")
-					}
-				}()
-			}
-			retry.NewExponential(tc.base)
-		})
-	}
+	// Output:
+	// 1s
+	// 2s
+	// 4s
+	// 8s
+	// 16s
 }
 
 func TestExponential(t *testing.T) {
@@ -191,17 +170,28 @@ func TestExponential(t *testing.T) {
 	}
 }
 
-func ExampleNewExponential() {
-	b := retry.NewExponential(1 * time.Second)
+func TestNewExponential(t *testing.T) {
+	t.Parallel()
 
-	for range 5 {
-		val, _ := b.Next()
-		fmt.Printf("%v\n", val)
-	}
-	// Output:
-	// 1s
-	// 2s
-	// 4s
-	// 8s
-	// 16s
+	t.Run("panics_on_zero", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		retry.NewExponential(0)
+	})
+
+	t.Run("panics_on_negative", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		retry.NewExponential(-1 * time.Second)
+	})
 }

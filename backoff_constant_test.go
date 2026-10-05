@@ -16,11 +16,10 @@ func TestNewConstant(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name      string
-		base      time.Duration
-		tries     int
-		exp       []time.Duration
-		wantPanic bool
+		name  string
+		base  time.Duration
+		tries int
+		exp   []time.Duration
 	}{
 		{
 			name:  "single",
@@ -63,31 +62,11 @@ func TestNewConstant(t *testing.T) {
 				1 * time.Nanosecond,
 			},
 		},
-		{
-			name:      "panics_on_zero",
-			base:      0,
-			wantPanic: true,
-		},
-		{
-			name:      "panics_on_negative",
-			base:      -1 * time.Second,
-			wantPanic: true,
-		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-
-			if tc.wantPanic {
-				defer func() {
-					if recover() == nil {
-						t.Errorf("expected panic")
-					}
-				}()
-				retry.NewConstant(tc.base)
-				return
-			}
 
 			b := retry.NewConstant(tc.base)
 
@@ -115,6 +94,43 @@ func TestNewConstant(t *testing.T) {
 			}
 		})
 	}
+
+	t.Run("panics_on_zero", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		retry.NewConstant(0)
+	})
+
+	t.Run("panics_on_negative", func(t *testing.T) {
+		t.Parallel()
+
+		defer func() {
+			if recover() == nil {
+				t.Errorf("expected panic")
+			}
+		}()
+		retry.NewConstant(-1 * time.Second)
+	})
+}
+
+func ExampleNewConstant() {
+	b := retry.NewConstant(1 * time.Second)
+
+	for range 5 {
+		val, _ := b.Next()
+		fmt.Printf("%v\n", val)
+	}
+	// Output:
+	// 1s
+	// 1s
+	// 1s
+	// 1s
+	// 1s
 }
 
 func TestConstant(t *testing.T) {
@@ -152,19 +168,4 @@ func TestConstant(t *testing.T) {
 			}
 		})
 	}
-}
-
-func ExampleNewConstant() {
-	b := retry.NewConstant(1 * time.Second)
-
-	for range 5 {
-		val, _ := b.Next()
-		fmt.Printf("%v\n", val)
-	}
-	// Output:
-	// 1s
-	// 1s
-	// 1s
-	// 1s
-	// 1s
 }

@@ -12,14 +12,15 @@ import (
 	"github.com/sethvargo/go-retry"
 )
 
-func TestConstantBackoff(t *testing.T) {
+func TestNewConstant(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name  string
-		base  time.Duration
-		tries int
-		exp   []time.Duration
+		name      string
+		base      time.Duration
+		tries     int
+		exp       []time.Duration
+		wantPanic bool
 	}{
 		{
 			name:  "single",
@@ -30,7 +31,7 @@ func TestConstantBackoff(t *testing.T) {
 			},
 		},
 		{
-			name:  "max",
+			name:  "constant",
 			base:  10 * time.Millisecond,
 			tries: 5,
 			exp: []time.Duration{
@@ -62,11 +63,31 @@ func TestConstantBackoff(t *testing.T) {
 				1 * time.Nanosecond,
 			},
 		},
+		{
+			name:      "panics_on_zero",
+			base:      0,
+			wantPanic: true,
+		},
+		{
+			name:      "panics_on_negative",
+			base:      -1 * time.Second,
+			wantPanic: true,
+		},
 	}
 
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
+
+			if tc.wantPanic {
+				defer func() {
+					if recover() == nil {
+						t.Errorf("expected panic")
+					}
+				}()
+				retry.NewConstant(tc.base)
+				return
+			}
 
 			b := retry.NewConstant(tc.base)
 
@@ -96,6 +117,43 @@ func TestConstantBackoff(t *testing.T) {
 	}
 }
 
+func TestConstant(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		base      time.Duration
+		failUntil int
+	}{
+		{
+			name:      "retries_until_success",
+			base:      1 * time.Nanosecond,
+			failUntil: 3,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			calls := 0
+			err := retry.Constant(context.Background(), tc.base, func(_ context.Context) error {
+				calls++
+				if calls < tc.failUntil {
+					return retry.RetryableError(errors.New("retry"))
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if calls != tc.failUntil {
+				t.Errorf("expected %d to be %d", calls, tc.failUntil)
+			}
+		})
+	}
+}
+
 func ExampleNewConstant() {
 	b := retry.NewConstant(1 * time.Second)
 
@@ -109,47 +167,4 @@ func ExampleNewConstant() {
 	// 1s
 	// 1s
 	// 1s
-}
-
-func TestConstant(t *testing.T) {
-	t.Parallel()
-
-	calls := 0
-	if err := retry.Constant(context.Background(), 1*time.Nanosecond, func(_ context.Context) error {
-		calls++
-		if calls < 3 {
-			return retry.RetryableError(errors.New("retry"))
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 3 {
-		t.Errorf("expected %d to be %d", calls, 3)
-	}
-}
-
-func TestNewConstant_panics(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		base time.Duration
-	}{
-		{name: "zero", base: 0},
-		{name: "negative", base: -1 * time.Second},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			defer func() {
-				if recover() == nil {
-					t.Errorf("expected panic")
-				}
-			}()
-			retry.NewConstant(tc.base)
-		})
-	}
 }

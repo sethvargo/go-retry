@@ -13,7 +13,7 @@ import (
 	"github.com/sethvargo/go-retry"
 )
 
-func TestFibonacciBackoff(t *testing.T) {
+func TestFibonacciBackoff_Next(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -114,6 +114,79 @@ func TestFibonacciBackoff(t *testing.T) {
 	}
 }
 
+func TestNewFibonacci(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		base      time.Duration
+		wantPanic bool
+	}{
+		{
+			name:      "panics_on_zero",
+			base:      0,
+			wantPanic: true,
+		},
+		{
+			name:      "panics_on_negative",
+			base:      -1 * time.Second,
+			wantPanic: true,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			if tc.wantPanic {
+				defer func() {
+					if recover() == nil {
+						t.Errorf("expected panic")
+					}
+				}()
+			}
+			retry.NewFibonacci(tc.base)
+		})
+	}
+}
+
+func TestFibonacci(t *testing.T) {
+	t.Parallel()
+
+	cases := []struct {
+		name      string
+		base      time.Duration
+		failUntil int
+	}{
+		{
+			name:      "retries_until_success",
+			base:      1 * time.Nanosecond,
+			failUntil: 3,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+
+			calls := 0
+			err := retry.Fibonacci(context.Background(), tc.base, func(_ context.Context) error {
+				calls++
+				if calls < tc.failUntil {
+					return retry.RetryableError(errors.New("retry"))
+				}
+				return nil
+			})
+			if err != nil {
+				t.Fatal(err)
+			}
+			if calls != tc.failUntil {
+				t.Errorf("expected %d to be %d", calls, tc.failUntil)
+			}
+		})
+	}
+}
+
 func ExampleNewFibonacci() {
 	b := retry.NewFibonacci(1 * time.Second)
 
@@ -127,47 +200,4 @@ func ExampleNewFibonacci() {
 	// 3s
 	// 5s
 	// 8s
-}
-
-func TestFibonacci(t *testing.T) {
-	t.Parallel()
-
-	calls := 0
-	if err := retry.Fibonacci(context.Background(), 1*time.Nanosecond, func(_ context.Context) error {
-		calls++
-		if calls < 3 {
-			return retry.RetryableError(errors.New("retry"))
-		}
-		return nil
-	}); err != nil {
-		t.Fatal(err)
-	}
-	if calls != 3 {
-		t.Errorf("expected %d to be %d", calls, 3)
-	}
-}
-
-func TestNewFibonacci_panics(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name string
-		base time.Duration
-	}{
-		{name: "zero", base: 0},
-		{name: "negative", base: -1 * time.Second},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			defer func() {
-				if recover() == nil {
-					t.Errorf("expected panic")
-				}
-			}()
-			retry.NewFibonacci(tc.base)
-		})
-	}
 }

@@ -114,6 +114,7 @@ func WithFullJitter(next Backoff) Backoff {
 }
 
 // WithMaxRetries executes the backoff function up until the maximum attempts.
+// The returned Backoff is stateful and must not be reused across retries.
 func WithMaxRetries(max uint64, next Backoff) Backoff {
 	var l sync.Mutex
 	var attempt uint64
@@ -156,7 +157,8 @@ func WithCappedDuration(cap time.Duration, next Backoff) Backoff {
 
 // WithMaxDuration sets a maximum on the total amount of time a backoff should
 // execute. It's best-effort, and should not be used to guarantee an exact
-// amount of time.
+// amount of time. The returned Backoff is stateful and must not be reused
+// across retries.
 func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 	start := time.Now()
 

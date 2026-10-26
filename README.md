@@ -61,6 +61,10 @@ func main() {
 In addition to your own custom algorithms, there are built-in algorithms for
 backoff in the library.
 
+> [!WARNING]
+> Some of the `Backoff` instances are stateful.
+> Create a new one for each independent retry operation instead of reusing it across calls.
+
 ### Constant
 
 A very rudimentary backoff, just returns a constant value. Here is an example:
@@ -134,7 +138,7 @@ b = WithFullJitter(b)
 ### MaxRetries
 
 To terminate a retry, specify the maximum number of _retries_. Note this
-is _retries_, not _attempts_. Attempts is retries + 1.
+is _retries_, not _attempts_. Attempts is retries + 1. Statefull.
 
 ```golang
 b := NewFibonacci(1 * time.Second)
@@ -158,7 +162,7 @@ b = WithCappedDuration(2 * time.Second, b)
 
 ### WithMaxDuration
 
-For a best-effort limit on the total execution time, specify a max duration:
+Statefull. For a best-effort limit on the total execution time, specify a max duration:
 
 ```golang
 b := NewFibonacci(1 * time.Second)

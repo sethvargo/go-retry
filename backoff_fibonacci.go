@@ -4,16 +4,8 @@ import (
 	"context"
 	"math"
 	"math/bits"
-	"sync/atomic"
 	"time"
 )
-
-type fibonacciBackoff struct {
-	base    uint64
-	attempt atomic.Uint64
-}
-
-var _ Backoff = (*fibonacciBackoff)(nil)
 
 // Fibonacci is a wrapper around [Do] that uses a Fibonacci backoff. See
 // [NewFibonacci].
@@ -34,29 +26,16 @@ func NewFibonacci(base time.Duration) Backoff {
 		panic("base must be greater than 0")
 	}
 
-	return &fibonacciBackoff{
-		base: uint64(base),
-	}
-}
-
-// Next implements Backoff. It is safe for concurrent use.
-func (b *fibonacciBackoff) Next() (time.Duration, bool) {
-	for {
-		attempt := b.attempt.Load()
+	return func(attempt uint64) (time.Duration, bool) {
 		if attempt >= uint64(len(fibonacciNumbers)) {
 			return math.MaxInt64, false
 		}
 
-		// Saturate on overflow without advancing, so the sequence ends at the
-		// maximum duration.
-		hi, lo := bits.Mul64(b.base, fibonacciNumbers[attempt])
+		hi, lo := bits.Mul64(uint64(base), fibonacciNumbers[attempt])
 		if hi != 0 || lo > math.MaxInt64 {
 			return math.MaxInt64, false
 		}
-
-		if b.attempt.CompareAndSwap(attempt, attempt+1) {
-			return time.Duration(lo), false
-		}
+		return time.Duration(lo), false
 	}
 }
 

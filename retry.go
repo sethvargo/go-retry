@@ -47,7 +47,8 @@ func (e *retryableError) Error() string {
 
 // DoValue calls f until it succeeds, returns an error not marked with
 // [RetryableError], the backoff stops, or ctx is done. The provided context is
-// the same context passed to f.
+// the same context passed to f. To limit the total time spent retrying, use
+// [context.WithTimeout] on ctx.
 //
 // When the backoff stops, DoValue returns the error that was passed to
 // [RetryableError]. When ctx is done, it returns [context.Cause] joined with the
@@ -60,8 +61,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 	// allocate a timer.
 	var t *time.Timer
 
-	for {
-		// Return immediately if ctx is canceled
+	for attempt := uint64(0); ; attempt++ {
 		if err := context.Cause(ctx); err != nil {
 			return nilT, errors.Join(err, lastErr)
 		}
@@ -77,7 +77,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 			return nilT, err
 		}
 
-		next, stop := b.Next()
+		next, stop := b(attempt)
 		if stop {
 			return nilT, rerr.Unwrap()
 		}

@@ -18,7 +18,7 @@ func NewConstant(base time.Duration) Backoff {
 		panic("base must be greater than 0")
 	}
 
-	return BackoffFunc(func() (time.Duration, bool) {
+	return func(uint64) (time.Duration, bool) {
 		return base, false
-	})
+	}
 }

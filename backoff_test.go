@@ -4,19 +4,18 @@ import (
 	"context"
 	"math"
 	"testing"
-	"testing/synctest"
 	"time"
 
 	"github.com/sethvargo/go-retry"
 )
 
-func ExampleBackoffFunc() {
+func ExampleBackoff() {
 	ctx := context.Background()
 
 	// Example backoff middleware that adds the provided duration t to the result.
-	withShift := func(t time.Duration, next retry.Backoff) retry.BackoffFunc {
-		return func() (time.Duration, bool) {
-			val, stop := next.Next()
+	withShift := func(t time.Duration, next retry.Backoff) retry.Backoff {
+		return func(attempt uint64) (time.Duration, bool) {
+			val, stop := next(attempt)
 			if stop {
 				return 0, true
 			}
@@ -36,7 +35,7 @@ func ExampleBackoffFunc() {
 	}
 }
 
-func TestBackoffFunc_Next(t *testing.T) {
+func TestBackoff(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
@@ -60,11 +59,11 @@ func TestBackoffFunc_Next(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			b := retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.Backoff(func(uint64) (time.Duration, bool) {
 				return tc.val, tc.stop
 			})
 
-			val, stop := b.Next()
+			val, stop := b(0)
 			if val != tc.val {
 				t.Errorf("expected %v to be %v", val, tc.val)
 			}
@@ -182,12 +181,12 @@ func TestWithJitter(t *testing.T) {
 				iters = 1
 			}
 
-			b := retry.WithJitter(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithJitter(tc.j, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return tc.val, tc.stop
 			}))
 
 			for range iters {
-				val, stop := b.Next()
+				val, stop := b(0)
 				if stop != tc.wantStop {
 					t.Fatalf("expected stop to be %t", tc.wantStop)
 				}
@@ -316,12 +315,12 @@ func TestWithJitterPercent(t *testing.T) {
 				iters = 1
 			}
 
-			b := retry.WithJitterPercent(tc.j, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithJitterPercent(tc.j, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return tc.val, tc.stop
 			}))
 
 			for range iters {
-				val, stop := b.Next()
+				val, stop := b(0)
 				if stop != tc.wantStop {
 					t.Fatalf("expected stop to be %t", tc.wantStop)
 				}
@@ -397,12 +396,12 @@ func TestWithFullJitter(t *testing.T) {
 				iters = 1
 			}
 
-			b := retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithFullJitter(retry.Backoff(func(uint64) (time.Duration, bool) {
 				return tc.val, tc.stop
 			}))
 
 			for range iters {
-				val, stop := b.Next()
+				val, stop := b(0)
 				if stop != tc.wantStop {
 					t.Fatalf("expected stop to be %t", tc.wantStop)
 				}
@@ -473,12 +472,12 @@ func TestWithMaxRetries(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			b := retry.WithMaxRetries(tc.max, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithMaxRetries(tc.max, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return tc.val, tc.innerStop
 			}))
 
 			for i := range tc.wantSuccesses {
-				val, stop := b.Next()
+				val, stop := b(uint64(i))
 				if stop {
 					t.Fatalf("should not stop on attempt %d", i)
 				}
@@ -487,7 +486,7 @@ func TestWithMaxRetries(t *testing.T) {
 				}
 			}
 
-			val, stop := b.Next()
+			val, stop := b(uint64(tc.wantSuccesses))
 			if !stop {
 				t.Errorf("should stop")
 			}
@@ -525,37 +524,37 @@ func TestWithCappedDuration(t *testing.T) {
 		{
 			name:    "caps_when_exceeded",
 			cap:     3 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 5 * time.Second, false }),
+			backoff: retry.Backoff(func(uint64) (time.Duration, bool) { return 5 * time.Second, false }),
 			want:    3 * time.Second,
 		},
 		{
 			name:    "zero",
 			cap:     5 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
+			backoff: retry.Backoff(func(uint64) (time.Duration, bool) { return 0, false }),
 			want:    0,
 		},
 		{
 			name:    "full_jitter",
 			cap:     5 * time.Second,
-			backoff: retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Nanosecond, false })),
+			backoff: retry.WithFullJitter(retry.Backoff(func(uint64) (time.Duration, bool) { return 1 * time.Nanosecond, false })),
 			want:    0,
 		},
 		{
 			name:    "negative_cap",
 			cap:     -1 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, false }),
+			backoff: retry.Backoff(func(uint64) (time.Duration, bool) { return 1 * time.Second, false }),
 			want:    0,
 		},
 		{
 			name:    "negative_backoff",
 			cap:     5 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return -5 * time.Second, false }),
+			backoff: retry.Backoff(func(uint64) (time.Duration, bool) { return -5 * time.Second, false }),
 			want:    0,
 		},
 		{
 			name:     "stop_propagates",
 			cap:      5 * time.Second,
-			backoff:  retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, true }),
+			backoff:  retry.Backoff(func(uint64) (time.Duration, bool) { return 1 * time.Second, true }),
 			want:     0,
 			wantStop: true,
 		},
@@ -566,7 +565,7 @@ func TestWithCappedDuration(t *testing.T) {
 			t.Parallel()
 
 			b := retry.WithCappedDuration(tc.cap, tc.backoff)
-			val, stop := b.Next()
+			val, stop := b(0)
 			if stop != tc.wantStop {
 				t.Fatalf("expected stop to be %t", tc.wantStop)
 			}
@@ -582,111 +581,6 @@ func ExampleWithCappedDuration() {
 
 	b := retry.NewFibonacci(1 * time.Second)
 	b = retry.WithCappedDuration(3*time.Second, b)
-
-	if err := retry.Do(ctx, b, func(_ context.Context) error {
-		// TODO: logic here
-		return nil
-	}); err != nil {
-		// handle error
-	}
-}
-
-func TestWithMaxDuration(t *testing.T) {
-	t.Parallel()
-
-	cases := []struct {
-		name     string
-		timeout  time.Duration
-		backoff  retry.Backoff
-		wantMax  time.Duration
-		wantStop bool
-	}{
-		{
-			name:    "caps_to_remaining",
-			timeout: 250 * time.Millisecond,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, false }),
-			wantMax: 250 * time.Millisecond,
-		},
-		{
-			name:    "zero",
-			timeout: 10 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
-			wantMax: 0,
-		},
-		{
-			name:     "stop_propagates",
-			timeout:  10 * time.Second,
-			backoff:  retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, true }),
-			wantMax:  0,
-			wantStop: true,
-		},
-		{
-			name:    "negative_backoff",
-			timeout: 10 * time.Second,
-			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return -5 * time.Second, false }),
-			wantMax: 0,
-		},
-	}
-
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			t.Parallel()
-
-			b := retry.WithMaxDuration(tc.timeout, tc.backoff)
-			val, stop := b.Next()
-			if stop != tc.wantStop {
-				t.Fatalf("expected stop to be %t", tc.wantStop)
-			}
-			if val < 0 || val > tc.wantMax {
-				t.Errorf("expected %v to be between 0 and %v", val, tc.wantMax)
-			}
-		})
-	}
-
-	t.Run("decrements_over_time", func(t *testing.T) {
-		t.Parallel()
-
-		synctest.Test(t, func(t *testing.T) {
-			b := retry.WithMaxDuration(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
-				return 1 * time.Second, false
-			}))
-
-			val, stop := b.Next()
-			if stop {
-				t.Error("should not stop")
-			}
-			if got, want := val, 250*time.Millisecond; got != want {
-				t.Errorf("expected %v to be %v", got, want)
-			}
-
-			time.Sleep(200 * time.Millisecond)
-
-			val, stop = b.Next()
-			if stop {
-				t.Error("should not stop")
-			}
-			if got, want := val, 50*time.Millisecond; got != want {
-				t.Errorf("expected %v to be %v", got, want)
-			}
-
-			time.Sleep(50 * time.Millisecond)
-
-			val, stop = b.Next()
-			if !stop {
-				t.Errorf("should stop")
-			}
-			if val != 0 {
-				t.Errorf("expected %v to be %v", val, time.Duration(0))
-			}
-		})
-	})
-}
-
-func ExampleWithMaxDuration() {
-	ctx := context.Background()
-
-	b := retry.NewFibonacci(1 * time.Second)
-	b = retry.WithMaxDuration(5*time.Second, b)
 
 	if err := retry.Do(ctx, b, func(_ context.Context) error {
 		// TODO: logic here

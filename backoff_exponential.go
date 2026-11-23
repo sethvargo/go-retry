@@ -3,16 +3,8 @@ package retry
 import (
 	"context"
 	"math"
-	"sync/atomic"
 	"time"
 )
-
-type exponentialBackoff struct {
-	base    time.Duration
-	attempt atomic.Uint64
-}
-
-var _ Backoff = (*exponentialBackoff)(nil)
 
 // Exponential is a wrapper around [Do] that uses an exponential backoff. See
 // [NewExponential].
@@ -32,22 +24,10 @@ func NewExponential(base time.Duration) Backoff {
 		panic("base must be greater than 0")
 	}
 
-	return &exponentialBackoff{
-		base: base,
-	}
-}
-
-// Next implements Backoff. It is safe for concurrent use.
-func (b *exponentialBackoff) Next() (time.Duration, bool) {
-	for {
-		attempt := b.attempt.Load()
-		next := b.base << attempt
-		if next <= 0 {
+	return func(attempt uint64) (time.Duration, bool) {
+		if base > math.MaxInt64>>attempt {
 			return math.MaxInt64, false
 		}
-
-		if b.attempt.CompareAndSwap(attempt, attempt+1) {
-			return next, false
-		}
+		return base << attempt, false
 	}
 }

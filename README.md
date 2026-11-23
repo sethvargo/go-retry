@@ -4,7 +4,8 @@
 
 Retry is a Go library for facilitating retry logic and backoff. It's highly
 extensible with full control over how and when retries occur. You can also write
-your own custom backoff functions by implementing the Backoff interface.
+your own custom backoff functions: a `Backoff` is a
+`func(attempt uint64) (time.Duration, bool)`.
 
 ## Features
 
@@ -15,8 +16,8 @@ your own custom backoff functions by implementing the Backoff interface.
 - **Independent** - No external dependencies besides the Go standard library,
   meaning it won't bloat your project.
 
-- **Concurrent** - Unless otherwise specified, everything is safe for concurrent
-  use.
+- **Concurrent** - Backoffs hold no state, so one backoff can be reused across
+  calls and shared between goroutines.
 
 - **Context-aware** - Use native Go contexts to control cancellation.
 
@@ -156,15 +157,20 @@ b := retry.NewFibonacci(1 * time.Second)
 b = retry.WithCappedDuration(2*time.Second, b)
 ```
 
-### WithMaxDuration
+### Total time
 
-For a best-effort limit on the total execution time, specify a max duration:
+To limit the total time spent retrying, set a deadline on the context:
 
 ```golang
-b := retry.NewFibonacci(1 * time.Second)
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
 
-// Ensure the maximum total retry time is 5s.
-b = retry.WithMaxDuration(5*time.Second, b)
+// When the deadline passes, err wraps both context.DeadlineExceeded and the
+// last error from the function.
+err := retry.Do(ctx, retry.NewFibonacci(1*time.Second), func(ctx context.Context) error {
+	// ...
+	return nil
+})
 ```
 
 ## Notes and Caveats

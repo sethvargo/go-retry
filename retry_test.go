@@ -81,7 +81,7 @@ func TestDoValue(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
-			b := retry.WithMaxRetries(5, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithMaxRetries(5, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return 1 * time.Nanosecond, false
 			}))
 
@@ -153,7 +153,7 @@ func TestDo(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
-			b := retry.WithMaxRetries(tc.maxRetries, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithMaxRetries(tc.maxRetries, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return 1 * time.Nanosecond, false
 			}))
 
@@ -178,10 +178,27 @@ func TestDo(t *testing.T) {
 		})
 	}
 
+	t.Run("reused_backoff", func(t *testing.T) {
+		t.Parallel()
+
+		b := retry.WithMaxRetries(2, retry.NewConstant(1*time.Nanosecond))
+
+		for range 2 {
+			calls := 0
+			_ = retry.Do(t.Context(), b, func(_ context.Context) error {
+				calls++
+				return retry.RetryableError(errors.New("oops"))
+			})
+			if got, want := calls, 3; got != want {
+				t.Errorf("expected %d to be %d", got, want)
+			}
+		}
+	})
+
 	t.Run("context_canceled", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
+		b := retry.Backoff(func(uint64) (time.Duration, bool) {
 			return 5 * time.Second, false
 		})
 

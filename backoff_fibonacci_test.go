@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
 
@@ -16,7 +15,7 @@ import (
 func TestFibonacciBackoff_Next(t *testing.T) {
 	t.Parallel()
 
-	concurrentExp := []time.Duration{
+	saturatedExp := []time.Duration{
 		100_000 * time.Hour,
 		100_000 * time.Hour,
 		200_000 * time.Hour,
@@ -26,8 +25,8 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 		1_300_000 * time.Hour,
 		2_100_000 * time.Hour,
 	}
-	for len(concurrentExp) < 100 {
-		concurrentExp = append(concurrentExp, math.MaxInt64)
+	for len(saturatedExp) < 100 {
+		saturatedExp = append(saturatedExp, math.MaxInt64)
 	}
 
 	cases := []struct {
@@ -109,10 +108,10 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 			},
 		},
 		{
-			name:  "concurrent_overflow",
+			name:  "stays_saturated",
 			base:  100_000 * time.Hour,
 			tries: 100,
-			exp:   concurrentExp,
+			exp:   saturatedExp,
 		},
 	}
 
@@ -122,24 +121,10 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 
 			b := retry.NewFibonacci(tc.base)
 
-			resultsCh := make(chan time.Duration, tc.tries)
-			for range tc.tries {
-				go func() {
-					r, _ := b.Next()
-					resultsCh <- r
-				}()
-			}
-
 			results := make([]time.Duration, tc.tries)
 			for i := range tc.tries {
-				select {
-				case val := <-resultsCh:
-					results[i] = val
-				case <-time.After(5 * time.Second):
-					t.Fatal("timeout")
-				}
+				results[i], _ = b(uint64(i))
 			}
-			slices.Sort(results)
 
 			if !reflect.DeepEqual(results, tc.exp) {
 				t.Errorf("expected \n\n%v\n\n to be \n\n%v\n\n", results, tc.exp)
@@ -151,8 +136,8 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 func ExampleNewFibonacci() {
 	b := retry.NewFibonacci(1 * time.Second)
 
-	for range 5 {
-		val, _ := b.Next()
+	for i := range 5 {
+		val, _ := b(uint64(i))
 		fmt.Printf("%v\n", val)
 	}
 	// Output:

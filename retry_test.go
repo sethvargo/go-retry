@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sethvargo/go-retry"
@@ -99,7 +100,7 @@ func TestDoValue(t *testing.T) {
 				t.Errorf("expected %q to be %q", v, tc.want)
 			}
 			if calls != tc.failUntil {
-				t.Errorf("expected %d calls, got %d", calls, tc.failUntil)
+				t.Errorf("expected %d to be %d", calls, tc.failUntil)
 			}
 		})
 	}
@@ -172,7 +173,7 @@ func TestDo(t *testing.T) {
 				t.Errorf("expected %v to be %v", err, tc.wantErrIs)
 			}
 			if calls != tc.wantCalls {
-				t.Errorf("expected %d calls, got %d", calls, tc.wantCalls)
+				t.Errorf("expected %d to be %d", calls, tc.wantCalls)
 			}
 		})
 	}
@@ -184,13 +185,14 @@ func TestDo(t *testing.T) {
 			return 5 * time.Second, false
 		})
 
-		ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
 		err := retry.Do(ctx, b, func(_ context.Context) error {
+			cancel()
 			return retry.RetryableError(fmt.Errorf("oops"))
 		})
-		if got, want := err, context.DeadlineExceeded; got != want {
+		if got, want := err, context.Canceled; !errors.Is(got, want) {
 			t.Errorf("expected %v to be %v", got, want)
 		}
 	})
@@ -198,42 +200,41 @@ func TestDo(t *testing.T) {
 	t.Run("deadline_exceeded", func(t *testing.T) {
 		t.Parallel()
 
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
-		defer cancel()
+		synctest.Test(t, func(t *testing.T) {
+			ctx, cancel := context.WithTimeout(t.Context(), 10*time.Millisecond)
+			defer cancel()
 
-		b := retry.NewConstant(20 * time.Millisecond)
+			b := retry.NewConstant(20 * time.Millisecond)
 
-		start := time.Now()
-		err := retry.Do(ctx, b, func(_ context.Context) error {
-			return retry.RetryableError(fmt.Errorf("oops"))
+			start := time.Now()
+			err := retry.Do(ctx, b, func(_ context.Context) error {
+				return retry.RetryableError(fmt.Errorf("oops"))
+			})
+			if got, want := err, context.DeadlineExceeded; !errors.Is(got, want) {
+				t.Errorf("expected %v to be %v", got, want)
+			}
+			if got, want := time.Since(start), 10*time.Millisecond; got != want {
+				t.Errorf("expected %s to be %s", got, want)
+			}
 		})
-		if err == nil {
-			t.Fatal("expected err")
-		}
-		if got, want := err, context.DeadlineExceeded; got != want {
-			t.Errorf("expected %v to be %v", got, want)
-		}
-		if got, want := time.Since(start), 15*time.Millisecond; got > want {
-			t.Errorf("expected %s to be less than %s", got, want)
-		}
 	})
 
 	t.Run("canceled_before_first_call", func(t *testing.T) {
-		for range 100_000 {
-			ctx, cancel := context.WithCancel(context.Background())
+		t.Parallel()
 
-			calls := 0
-			b := retry.WithJitter(5*time.Millisecond, retry.WithMaxRetries(5, retry.NewConstant(1*time.Millisecond)))
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
 
-			cancel()
-			retry.Do(ctx, b, func(_ context.Context) error {
-				calls++
-				return retry.RetryableError(errors.New("nope"))
-			})
-
-			if calls > 1 {
-				t.Errorf("rf was called %d times instead of 0 or 1", calls)
-			}
+		calls := 0
+		err := retry.Do(ctx, retry.NewConstant(1*time.Millisecond), func(_ context.Context) error {
+			calls++
+			return retry.RetryableError(errors.New("nope"))
+		})
+		if got, want := err, context.Canceled; !errors.Is(got, want) {
+			t.Errorf("expected %v to be %v", got, want)
+		}
+		if got, want := calls, 0; got != want {
+			t.Errorf("expected %d to be %d", got, want)
 		}
 	})
 }

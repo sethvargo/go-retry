@@ -26,11 +26,19 @@ jobs:
         with:
           go-version-file: 'go.mod'
 
+      - name: 'Check formatting'
+        run: |-
+          test -z "$(gofmt -l .)"
+
+      - name: 'Vet'
+        run: |-
+          go vet ./...
+
       - name: 'Test'
         run: |-
           go test \
             -count=1 \
             -race \
-            -short \
+            -shuffle=on \
             -timeout=5m \
             ./...

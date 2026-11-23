@@ -16,6 +16,20 @@ import (
 func TestFibonacciBackoff_Next(t *testing.T) {
 	t.Parallel()
 
+	concurrentExp := []time.Duration{
+		100_000 * time.Hour,
+		100_000 * time.Hour,
+		200_000 * time.Hour,
+		300_000 * time.Hour,
+		500_000 * time.Hour,
+		800_000 * time.Hour,
+		1_300_000 * time.Hour,
+		2_100_000 * time.Hour,
+	}
+	for len(concurrentExp) < 100 {
+		concurrentExp = append(concurrentExp, math.MaxInt64)
+	}
+
 	cases := []struct {
 		name  string
 		base  time.Duration
@@ -93,6 +107,12 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 				math.MaxInt64,
 				math.MaxInt64,
 			},
+		},
+		{
+			name:  "concurrent_overflow",
+			base:  100_000 * time.Hour,
+			tries: 100,
+			exp:   concurrentExp,
 		},
 	}
 

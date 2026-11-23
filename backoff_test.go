@@ -4,6 +4,7 @@ import (
 	"context"
 	"math"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/sethvargo/go-retry"
@@ -422,6 +423,7 @@ func TestWithMaxRetries(t *testing.T) {
 	cases := []struct {
 		name          string
 		max           uint64
+		innerStop     bool
 		wantSuccesses int
 	}{
 		{
@@ -434,6 +436,12 @@ func TestWithMaxRetries(t *testing.T) {
 			max:           0,
 			wantSuccesses: 0,
 		},
+		{
+			name:          "stop_propagates",
+			max:           3,
+			innerStop:     true,
+			wantSuccesses: 0,
+		},
 	}
 
 	for _, tc := range cases {
@@ -441,7 +449,7 @@ func TestWithMaxRetries(t *testing.T) {
 			t.Parallel()
 
 			b := retry.WithMaxRetries(tc.max, retry.BackoffFunc(func() (time.Duration, bool) {
-				return 1 * time.Second, false
+				return 1 * time.Second, tc.innerStop
 			}))
 
 			for i := range tc.wantSuccesses {
@@ -483,10 +491,11 @@ func TestWithCappedDuration(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
-		cap     time.Duration
-		backoff retry.Backoff
-		want    time.Duration
+		name     string
+		cap      time.Duration
+		backoff  retry.Backoff
+		want     time.Duration
+		wantStop bool
 	}{
 		{
 			name:    "caps_when_exceeded",
@@ -506,6 +515,13 @@ func TestWithCappedDuration(t *testing.T) {
 			backoff: retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Nanosecond, false })),
 			want:    0,
 		},
+		{
+			name:     "stop_propagates",
+			cap:      5 * time.Second,
+			backoff:  retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, true }),
+			want:     0,
+			wantStop: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -514,8 +530,8 @@ func TestWithCappedDuration(t *testing.T) {
 
 			b := retry.WithCappedDuration(tc.cap, tc.backoff)
 			val, stop := b.Next()
-			if stop {
-				t.Fatal("should not stop")
+			if stop != tc.wantStop {
+				t.Fatalf("expected stop to be %t", tc.wantStop)
 			}
 			if val != tc.want {
 				t.Errorf("expected %v to be %v", val, tc.want)
@@ -542,10 +558,11 @@ func TestWithMaxDuration(t *testing.T) {
 	t.Parallel()
 
 	cases := []struct {
-		name    string
-		timeout time.Duration
-		backoff retry.Backoff
-		wantMax time.Duration
+		name     string
+		timeout  time.Duration
+		backoff  retry.Backoff
+		wantMax  time.Duration
+		wantStop bool
 	}{
 		{
 			name:    "caps_to_remaining",
@@ -559,6 +576,13 @@ func TestWithMaxDuration(t *testing.T) {
 			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 0, false }),
 			wantMax: 0,
 		},
+		{
+			name:     "stop_propagates",
+			timeout:  10 * time.Second,
+			backoff:  retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, true }),
+			wantMax:  0,
+			wantStop: true,
+		},
 	}
 
 	for _, tc := range cases {
@@ -567,8 +591,8 @@ func TestWithMaxDuration(t *testing.T) {
 
 			b := retry.WithMaxDuration(tc.timeout, tc.backoff)
 			val, stop := b.Next()
-			if stop {
-				t.Fatal("should not stop")
+			if stop != tc.wantStop {
+				t.Fatalf("expected stop to be %t", tc.wantStop)
 			}
 			if val > tc.wantMax {
 				t.Errorf("expected %v to be at most %v", val, tc.wantMax)
@@ -579,37 +603,39 @@ func TestWithMaxDuration(t *testing.T) {
 	t.Run("decrements_over_time", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.WithMaxDuration(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
-			return 1 * time.Second, false
-		}))
+		synctest.Test(t, func(t *testing.T) {
+			b := retry.WithMaxDuration(250*time.Millisecond, retry.BackoffFunc(func() (time.Duration, bool) {
+				return 1 * time.Second, false
+			}))
 
-		val, stop := b.Next()
-		if stop {
-			t.Error("should not stop")
-		}
-		if val > 250*time.Millisecond {
-			t.Errorf("expected %v to be less than %v", val, 250*time.Millisecond)
-		}
+			val, stop := b.Next()
+			if stop {
+				t.Error("should not stop")
+			}
+			if got, want := val, 250*time.Millisecond; got != want {
+				t.Errorf("expected %v to be %v", got, want)
+			}
 
-		time.Sleep(200 * time.Millisecond)
+			time.Sleep(200 * time.Millisecond)
 
-		val, stop = b.Next()
-		if stop {
-			t.Error("should not stop")
-		}
-		if val > 50*time.Millisecond {
-			t.Errorf("expected %v to be less than %v", val, 50*time.Millisecond)
-		}
+			val, stop = b.Next()
+			if stop {
+				t.Error("should not stop")
+			}
+			if got, want := val, 50*time.Millisecond; got != want {
+				t.Errorf("expected %v to be %v", got, want)
+			}
 
-		time.Sleep(50 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
-		val, stop = b.Next()
-		if !stop {
-			t.Errorf("should stop")
-		}
-		if val != 0 {
-			t.Errorf("expected %v to be %v", val, time.Duration(0))
-		}
+			val, stop = b.Next()
+			if !stop {
+				t.Errorf("should stop")
+			}
+			if val != 0 {
+				t.Errorf("expected %v to be %v", val, time.Duration(0))
+			}
+		})
 	})
 }
 

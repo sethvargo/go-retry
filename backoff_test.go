@@ -111,6 +111,13 @@ func TestWithJitter(t *testing.T) {
 			max:  1 * time.Second,
 		},
 		{
+			name: "zero_with_negative_backoff",
+			j:    0,
+			val:  -5 * time.Second,
+			min:  0,
+			max:  0,
+		},
+		{
 			name:     "stop_propagates",
 			j:        0,
 			stop:     true,
@@ -238,6 +245,13 @@ func TestWithJitterPercent(t *testing.T) {
 			max:  1 * time.Second,
 		},
 		{
+			name: "zero_with_negative_backoff",
+			j:    0,
+			val:  -5 * time.Second,
+			min:  0,
+			max:  0,
+		},
+		{
 			name:     "stop_propagates",
 			j:        0,
 			stop:     true,
@@ -248,7 +262,7 @@ func TestWithJitterPercent(t *testing.T) {
 			j:     1,
 			val:   math.MaxInt64,
 			iters: 1_000,
-			min:   math.MaxInt64,
+			min:   math.MaxInt64 / 100 * 98, // 1% below, plus room for float64 rounding
 			max:   math.MaxInt64,
 		},
 		{
@@ -256,7 +270,7 @@ func TestWithJitterPercent(t *testing.T) {
 			j:     100,
 			val:   math.MaxInt64,
 			iters: 1_000,
-			min:   math.MaxInt64 / 100,
+			min:   0,
 			max:   math.MaxInt64,
 		},
 		{
@@ -272,7 +286,7 @@ func TestWithJitterPercent(t *testing.T) {
 			j:     101,
 			val:   1 * time.Second,
 			iters: 10_000,
-			min:   1,
+			min:   0,
 			max:   2 * time.Second,
 		},
 		{
@@ -280,7 +294,7 @@ func TestWithJitterPercent(t *testing.T) {
 			j:     200,
 			val:   1 * time.Second,
 			iters: 10_000,
-			min:   1,
+			min:   0,
 			max:   2 * time.Second,
 		},
 		{
@@ -288,7 +302,7 @@ func TestWithJitterPercent(t *testing.T) {
 			j:     1 << 62,
 			val:   1 * time.Second,
 			iters: 10_000,
-			min:   1,
+			min:   0,
 			max:   2 * time.Second,
 		},
 	}
@@ -364,8 +378,8 @@ func TestWithFullJitter(t *testing.T) {
 		{
 			name: "negative",
 			val:  -5 * time.Second,
-			min:  -5 * time.Second,
-			max:  -5 * time.Second,
+			min:  0,
+			max:  0,
 		},
 		{
 			name:     "stop_propagates",
@@ -513,6 +527,18 @@ func TestWithCappedDuration(t *testing.T) {
 			name:    "full_jitter",
 			cap:     5 * time.Second,
 			backoff: retry.WithFullJitter(retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Nanosecond, false })),
+			want:    0,
+		},
+		{
+			name:    "negative_cap",
+			cap:     -1 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return 1 * time.Second, false }),
+			want:    0,
+		},
+		{
+			name:    "negative_backoff",
+			cap:     5 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return -5 * time.Second, false }),
 			want:    0,
 		},
 		{

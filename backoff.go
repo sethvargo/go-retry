@@ -130,7 +130,7 @@ func WithMaxRetries(maxRetries uint64, next Backoff) Backoff {
 			return 0, true
 		}
 
-		return val, false
+		return max(val, 0), false
 	})
 }
 
@@ -166,9 +166,6 @@ func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if val > diff {
-			val = diff
-		}
-		return val, false
+		return max(min(val, diff), 0), false
 	})
 }

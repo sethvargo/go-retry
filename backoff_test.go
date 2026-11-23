@@ -437,13 +437,17 @@ func TestWithMaxRetries(t *testing.T) {
 	cases := []struct {
 		name          string
 		max           uint64
+		val           time.Duration
 		innerStop     bool
 		wantSuccesses int
+		want          time.Duration
 	}{
 		{
 			name:          "exhausts_after_max",
 			max:           3,
+			val:           1 * time.Second,
 			wantSuccesses: 3,
+			want:          1 * time.Second,
 		},
 		{
 			name:          "zero",
@@ -456,6 +460,13 @@ func TestWithMaxRetries(t *testing.T) {
 			innerStop:     true,
 			wantSuccesses: 0,
 		},
+		{
+			name:          "negative_backoff",
+			max:           1,
+			val:           -5 * time.Second,
+			wantSuccesses: 1,
+			want:          0,
+		},
 	}
 
 	for _, tc := range cases {
@@ -463,7 +474,7 @@ func TestWithMaxRetries(t *testing.T) {
 			t.Parallel()
 
 			b := retry.WithMaxRetries(tc.max, retry.BackoffFunc(func() (time.Duration, bool) {
-				return 1 * time.Second, tc.innerStop
+				return tc.val, tc.innerStop
 			}))
 
 			for i := range tc.wantSuccesses {
@@ -471,8 +482,8 @@ func TestWithMaxRetries(t *testing.T) {
 				if stop {
 					t.Fatalf("should not stop on attempt %d", i)
 				}
-				if val != 1*time.Second {
-					t.Errorf("expected %v to be %v", val, 1*time.Second)
+				if val != tc.want {
+					t.Errorf("expected %v to be %v", val, tc.want)
 				}
 			}
 
@@ -609,6 +620,12 @@ func TestWithMaxDuration(t *testing.T) {
 			wantMax:  0,
 			wantStop: true,
 		},
+		{
+			name:    "negative_backoff",
+			timeout: 10 * time.Second,
+			backoff: retry.BackoffFunc(func() (time.Duration, bool) { return -5 * time.Second, false }),
+			wantMax: 0,
+		},
 	}
 
 	for _, tc := range cases {
@@ -620,8 +637,8 @@ func TestWithMaxDuration(t *testing.T) {
 			if stop != tc.wantStop {
 				t.Fatalf("expected stop to be %t", tc.wantStop)
 			}
-			if val > tc.wantMax {
-				t.Errorf("expected %v to be at most %v", val, tc.wantMax)
+			if val < 0 || val > tc.wantMax {
+				t.Errorf("expected %v to be between 0 and %v", val, tc.wantMax)
 			}
 		})
 	}

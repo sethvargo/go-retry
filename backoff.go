@@ -56,8 +56,8 @@ func addClamp(a, b time.Duration) time.Duration {
 
 // WithJitterPercent wraps a backoff function and adds the specified jitter
 // percentage. j can be interpreted as "+/- j%". For example, if j were 5 and
-// the backoff returned 20s, the value could be between 19 and 21 seconds. The
-// value can never be less than 0 or greater than 100.
+// the backoff returned 20s, the value could be between 19 and 21 seconds. j is
+// clamped to 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
 	// Above 100 the computed percentage goes negative and int64(j)*2 overflows.
 	j = min(j, 100)
@@ -68,11 +68,11 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if j <= 0 {
+		if j == 0 {
 			return val, false
 		}
 
-		// Get a value between -j and j, the convert to a percentage
+		// Get a value between -j and j, then convert to a percentage
 		top := rand.Int64N(int64(j)*2) - int64(j)
 		pct := 1 - float64(top)/100.0
 
@@ -113,8 +113,9 @@ func WithFullJitter(next Backoff) Backoff {
 	})
 }
 
-// WithMaxRetries executes the backoff function up until the maximum attempts.
-func WithMaxRetries(max uint64, next Backoff) Backoff {
+// WithMaxRetries executes the backoff function up until the maximum retries.
+// Note this is retries, not attempts. Attempts is retries + 1.
+func WithMaxRetries(maxRetries uint64, next Backoff) Backoff {
 	var l sync.Mutex
 	var attempt uint64
 
@@ -122,7 +123,7 @@ func WithMaxRetries(max uint64, next Backoff) Backoff {
 		l.Lock()
 		defer l.Unlock()
 
-		if attempt >= max {
+		if attempt >= maxRetries {
 			return 0, true
 		}
 		attempt++
@@ -140,23 +141,23 @@ func WithMaxRetries(max uint64, next Backoff) Backoff {
 // backoff. This is NOT a total backoff time, but rather a cap on the maximum
 // value a backoff can return. Without another middleware, the backoff will
 // continue infinitely.
-func WithCappedDuration(cap time.Duration, next Backoff) Backoff {
+func WithCappedDuration(limit time.Duration, next Backoff) Backoff {
 	return BackoffFunc(func() (time.Duration, bool) {
 		val, stop := next.Next()
 		if stop {
 			return 0, true
 		}
 
-		if val > cap {
-			val = cap
+		if val > limit {
+			val = limit
 		}
 		return val, false
 	})
 }
 
 // WithMaxDuration sets a maximum on the total amount of time a backoff should
-// execute. It's best-effort, and should not be used to guarantee an exact
-// amount of time.
+// execute, starting from when WithMaxDuration is called. It's best-effort, and
+// should not be used to guarantee an exact amount of time.
 func WithMaxDuration(timeout time.Duration, next Backoff) Backoff {
 	start := time.Now()
 

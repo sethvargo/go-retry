@@ -1,10 +1,9 @@
 // Package retry provides helpers for retrying.
 //
 // This package defines flexible interfaces for retrying Go functions that may
-// be flakey or eventually consistent. It abstracts the "backoff" (how long to
+// be flaky or eventually consistent. It abstracts the "backoff" (how long to
 // wait between tries) and "retry" (execute the function again) mechanisms for
-// maximum flexibility. Furthermore, everything is an interface, so you can
-// define your own implementations.
+// maximum flexibility. You can define your own backoffs and middleware.
 //
 // The package is modeled after Go's built-in HTTP package, making it easy to
 // customize the built-in backoff with your own custom logic. Additionally,
@@ -21,7 +20,7 @@ import (
 // RetryFunc is a function passed to [Do].
 type RetryFunc func(ctx context.Context) error
 
-// RetryFuncValue is a function passed to [Do] which returns a value.
+// RetryFuncValue is a function passed to [DoValue] which returns a value.
 type RetryFuncValue[T any] func(ctx context.Context) (T, error)
 
 type retryableError struct {
@@ -43,12 +42,15 @@ func (e *retryableError) Unwrap() error {
 
 // Error returns the error string.
 func (e *retryableError) Error() string {
-	if e.err == nil {
-		return "retryable: <nil>"
-	}
 	return "retryable: " + e.err.Error()
 }
 
+// DoValue calls f until it succeeds, returns an error not marked with
+// [RetryableError], the backoff stops, or ctx is done. The provided context is
+// the same context passed to f.
+//
+// When the backoff stops, DoValue returns the error that was passed to
+// [RetryableError]. When ctx is done, it returns [context.Cause].
 func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
 	var nilT T
 

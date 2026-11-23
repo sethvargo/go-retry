@@ -13,8 +13,10 @@ type fibonacciBackoff struct {
 	state atomic.Pointer[state]
 }
 
-// Fibonacci is a wrapper around Retry that uses a Fibonacci backoff. See
-// NewFibonacci.
+var _ Backoff = (*fibonacciBackoff)(nil)
+
+// Fibonacci is a wrapper around [Do] that uses a Fibonacci backoff. See
+// [NewFibonacci].
 func Fibonacci(ctx context.Context, base time.Duration, f RetryFunc) error {
 	return Do(ctx, NewFibonacci(base), f)
 }
@@ -26,7 +28,7 @@ func Fibonacci(ctx context.Context, base time.Duration, f RetryFunc) error {
 // Once it overflows, the function constantly returns the maximum time.Duration
 // for a 64-bit integer.
 //
-// It panics if the given base is less than zero.
+// It panics if base is less than or equal to zero.
 func NewFibonacci(base time.Duration) Backoff {
 	if base <= 0 {
 		panic("base must be greater than 0")

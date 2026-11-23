@@ -35,7 +35,7 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 		}
 
 		if j <= 0 {
-			return val, false
+			return max(val, 0), false
 		}
 
 		// The unsigned bound fits even when twice j exceeds MaxInt64.
@@ -59,7 +59,7 @@ func addClamp(a, b time.Duration) time.Duration {
 // the backoff returned 20s, the value could be between 19 and 21 seconds. j is
 // clamped to 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
-	// Above 100 the computed percentage goes negative and int64(j)*2 overflows.
+	// Above 100 the random factor can go negative.
 	j = min(j, 100)
 
 	return BackoffFunc(func() (time.Duration, bool) {
@@ -69,13 +69,10 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 		}
 
 		if j == 0 {
-			return val, false
+			return max(val, 0), false
 		}
 
-		// Get a value between -j and j, then convert to a percentage
-		top := rand.Int64N(int64(j)*2) - int64(j)
-		pct := 1 - float64(top)/100.0
-
+		pct := 1 + (rand.Float64()*2-1)*float64(j)/100
 		return durationFromFloat(float64(val) * pct), false
 	})
 }
@@ -106,7 +103,7 @@ func WithFullJitter(next Backoff) Backoff {
 		}
 
 		if val <= 0 {
-			return val, false
+			return 0, false
 		}
 
 		return time.Duration(rand.Int64N(int64(val))), false
@@ -148,10 +145,7 @@ func WithCappedDuration(limit time.Duration, next Backoff) Backoff {
 			return 0, true
 		}
 
-		if val > limit {
-			val = limit
-		}
-		return val, false
+		return max(min(val, limit), 0), false
 	})
 }
 

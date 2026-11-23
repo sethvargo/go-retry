@@ -50,9 +50,11 @@ func (e *retryableError) Error() string {
 // the same context passed to f.
 //
 // When the backoff stops, DoValue returns the error that was passed to
-// [RetryableError]. When ctx is done, it returns [context.Cause].
+// [RetryableError]. When ctx is done, it returns [context.Cause] joined with the
+// last error from f, if there was one.
 func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
 	var nilT T
+	var lastErr error
 
 	// Created on the first wait, so calls that succeed on the first try never
 	// allocate a timer.
@@ -61,7 +63,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 	for {
 		// Return immediately if ctx is canceled
 		if err := context.Cause(ctx); err != nil {
-			return nilT, err
+			return nilT, errors.Join(err, lastErr)
 		}
 
 		v, err := f(ctx)
@@ -79,6 +81,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		if stop {
 			return nilT, rerr.Unwrap()
 		}
+		lastErr = rerr.Unwrap()
 
 		// Wait until next attempt or until the context expires. Any error will
 		// be caught at the top of the loop.

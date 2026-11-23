@@ -54,6 +54,10 @@ func (e *retryableError) Error() string {
 func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, error) {
 	var nilT T
 
+	// Created on the first wait, so calls that succeed on the first try never
+	// allocate a timer.
+	var t *time.Timer
+
 	for {
 		// Return immediately if ctx is canceled
 		if err := context.Cause(ctx); err != nil {
@@ -66,8 +70,8 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		}
 
 		// Not retryable
-		var rerr *retryableError
-		if !errors.As(err, &rerr) {
+		rerr, ok := errors.AsType[*retryableError](err)
+		if !ok {
 			return nilT, err
 		}
 
@@ -78,7 +82,11 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 
 		// Wait until next attempt or until the context expires. Any error will
 		// be caught at the top of the loop.
-		t := time.NewTimer(next)
+		if t == nil {
+			t = time.NewTimer(next)
+		} else {
+			t.Reset(next)
+		}
 		select {
 		case <-ctx.Done():
 			t.Stop()

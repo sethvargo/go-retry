@@ -31,15 +31,29 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 			},
 		},
 		{
+			name:  "base",
+			base:  1 * time.Nanosecond,
+			tries: 7,
+			exp: []time.Duration{
+				1 * time.Nanosecond,
+				1 * time.Nanosecond,
+				2 * time.Nanosecond,
+				3 * time.Nanosecond,
+				5 * time.Nanosecond,
+				8 * time.Nanosecond,
+				13 * time.Nanosecond,
+			},
+		},
+		{
 			name:  "max",
 			base:  10 * time.Millisecond,
 			tries: 5,
 			exp: []time.Duration{
 				10 * time.Millisecond,
+				10 * time.Millisecond,
 				20 * time.Millisecond,
 				30 * time.Millisecond,
 				50 * time.Millisecond,
-				80 * time.Millisecond,
 			},
 		},
 		{
@@ -47,6 +61,7 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 			base:  1 * time.Nanosecond,
 			tries: 14,
 			exp: []time.Duration{
+				1 * time.Nanosecond,
 				1 * time.Nanosecond,
 				2 * time.Nanosecond,
 				3 * time.Nanosecond,
@@ -60,7 +75,6 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 				144 * time.Nanosecond,
 				233 * time.Nanosecond,
 				377 * time.Nanosecond,
-				610 * time.Nanosecond,
 			},
 		},
 		{
@@ -69,13 +83,13 @@ func TestFibonacciBackoff_Next(t *testing.T) {
 			tries: 10,
 			exp: []time.Duration{
 				100_000 * time.Hour,
+				100_000 * time.Hour,
 				200_000 * time.Hour,
 				300_000 * time.Hour,
 				500_000 * time.Hour,
 				800_000 * time.Hour,
 				1_300_000 * time.Hour,
 				2_100_000 * time.Hour,
-				math.MaxInt64,
 				math.MaxInt64,
 				math.MaxInt64,
 			},
@@ -123,10 +137,10 @@ func ExampleNewFibonacci() {
 	}
 	// Output:
 	// 1s
+	// 1s
 	// 2s
 	// 3s
 	// 5s
-	// 8s
 }
 
 func TestFibonacci(t *testing.T) {

@@ -33,7 +33,7 @@ func NewFibonacci(base time.Duration) Backoff {
 	}
 
 	b := new(fibonacciBackoff)
-	b.state.Store(&state{0, base})
+	b.state.Store(&state{base, base})
 	return b
 }
 
@@ -41,14 +41,18 @@ func NewFibonacci(base time.Duration) Backoff {
 func (b *fibonacciBackoff) Next() (time.Duration, bool) {
 	for {
 		curr := b.state.Load()
-		next := curr[0] + curr[1]
-
-		if next <= 0 {
+		if curr[0] == math.MaxInt64 {
 			return math.MaxInt64, false
 		}
 
+		// Saturate on overflow so the sequence ends at the maximum duration.
+		next := curr[0] + curr[1]
+		if next <= 0 {
+			next = math.MaxInt64
+		}
+
 		if b.state.CompareAndSwap(curr, &state{curr[1], next}) {
-			return next, false
+			return curr[0], false
 		}
 	}
 }

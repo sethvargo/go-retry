@@ -39,6 +39,6 @@ jobs:
           go test \
             -count=1 \
             -race \
-            -short \
+            -shuffle=on \
             -timeout=5m \
             ./...

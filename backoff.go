@@ -6,16 +6,15 @@ import (
 	"time"
 )
 
-// Backoff returns how long to wait before the next retry, or stop=true to stop
-// retrying. [Do] passes the number of retries made so far, starting at 0. A
-// Backoff that depends only on attempt holds no state, so one value can be
+// Backoff returns the wait before the next retry, or stop=true to end
+// retrying. [Do] passes the number of retries made so far, starting at 0. The
+// built-in backoffs and middleware depend only on attempt, so one value can be
 // reused across [Do] calls and shared between goroutines.
 type Backoff func(attempt uint64) (next time.Duration, stop bool)
 
-// WithJitter wraps a backoff function and adds the specified jitter. j can be
-// interpreted as "+/- j". For example, if j were 5 seconds and the backoff
-// returned 20s, the value could be between 15 and 25 seconds. The value can
-// never be less than 0 or greater than the maximum time.Duration.
+// WithJitter adds a random amount in [-j, j) to each wait from next. For
+// example, with j = 5s and a 20s wait, the result is between 15s and 25s. The
+// result is never below 0 or above math.MaxInt64.
 func WithJitter(j time.Duration, next Backoff) Backoff {
 	return func(attempt uint64) (time.Duration, bool) {
 		val, stop := next(attempt)
@@ -33,10 +32,9 @@ func WithJitter(j time.Duration, next Backoff) Backoff {
 	}
 }
 
-// WithJitterPercent wraps a backoff function and adds the specified jitter
-// percentage. j can be interpreted as "+/- j%". For example, if j were 5 and
-// the backoff returned 20s, the value could be between 19 and 21 seconds. j is
-// clamped to 100.
+// WithJitterPercent multiplies each wait from next by a random factor in
+// [1-j/100, 1+j/100). For example, with j = 5 and a 20s wait, the result is
+// between 19s and 21s. A j above 100 counts as 100.
 func WithJitterPercent(j uint64, next Backoff) Backoff {
 	// Above 100 the random factor can go negative.
 	j = min(j, 100)
@@ -56,13 +54,9 @@ func WithJitterPercent(j uint64, next Backoff) Backoff {
 	}
 }
 
-// WithFullJitter wraps a backoff function and returns a random value between
-// zero (inclusive) and the wrapped backoff's returned value (exclusive). For
-// example, if the backoff returned 20s, the value could be anywhere in [0, 20s).
-//
-// Unlike WithJitter, which applies "+/- j" around the value, full jitter
-// spreads the wait across the entire range, which spreads out retrying clients
-// more effectively. See
+// WithFullJitter replaces each wait from next with a random value in [0, wait).
+// For example, a 20s wait becomes anything from 0 up to just under 20s. Retries
+// from many clients end up further apart than with [WithJitter]. See
 // https://aws.amazon.com/blogs/architecture/exponential-backoff-and-jitter/.
 func WithFullJitter(next Backoff) Backoff {
 	return func(attempt uint64) (time.Duration, bool) {
@@ -96,11 +90,9 @@ func WithMaxRetries(maxRetries uint64, next Backoff) Backoff {
 	}
 }
 
-// WithCappedDuration sets a maximum on the duration returned from the next
-// backoff. This is NOT a total backoff time, but rather a cap on the maximum
-// value a backoff can return. Without another middleware, the backoff will
-// continue infinitely. To limit the total time, use [context.WithTimeout] on
-// the context passed to [Do].
+// WithCappedDuration limits each wait from next to at most limit. It returns
+// stop=true only when next does. To limit the total time spent retrying, use
+// [context.WithTimeout] on the context passed to [Do].
 func WithCappedDuration(limit time.Duration, next Backoff) Backoff {
 	return func(attempt uint64) (time.Duration, bool) {
 		val, stop := next(attempt)

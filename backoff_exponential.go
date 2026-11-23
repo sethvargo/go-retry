@@ -6,17 +6,16 @@ import (
 	"time"
 )
 
-// Exponential is a wrapper around [Do] that uses an exponential backoff. See
-// [NewExponential].
+// Exponential calls [Do] with [NewExponential](base). With no retry limit, it
+// retries until f succeeds, f returns an error not marked with
+// [RetryableError], or ctx is done.
 func Exponential(ctx context.Context, base time.Duration, f RetryFunc) error {
 	return Do(ctx, NewExponential(base), f)
 }
 
-// NewExponential creates a new exponential backoff using the starting value of
-// base and doubling on each failure (1, 2, 4, 8, 16, 32, 64...).
-//
-// Once it overflows, the function constantly returns the maximum time.Duration
-// for a 64-bit integer.
+// NewExponential returns a backoff that waits base, then doubles the wait on
+// each retry (1, 2, 4, 8, 16, 32, 64...). Once the wait overflows, it stays at
+// math.MaxInt64.
 //
 // It panics if base is less than or equal to zero.
 func NewExponential(base time.Duration) Backoff {

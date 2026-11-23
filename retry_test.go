@@ -307,7 +307,7 @@ func ExampleDo_timeout() {
 }
 
 func ExampleDo_customRetry() {
-	// srv stands in for a flaky service: it returns 503 twice, then 200.
+	// The test server returns 503 for the first two requests and 200 after that.
 	var requests atomic.Int64
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if requests.Add(1) <= 2 {
@@ -321,8 +321,8 @@ func ExampleDo_customRetry() {
 	client := &http.Client{Timeout: 5 * time.Second}
 	b := retry.WithMaxRetries(3, retry.NewConstant(1*time.Millisecond))
 
-	// Only errors wrapped with RetryableError are retried, so a 5xx response
-	// retries and a 4xx response fails right away.
+	// Do retries only errors wrapped with RetryableError. This function wraps
+	// errors for 5xx responses, so Do retries them, and returns 4xx errors as is.
 	err := retry.Do(context.Background(), b, func(ctx context.Context) error {
 		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
 		if err != nil {

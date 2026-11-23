@@ -1,14 +1,10 @@
-// Package retry provides helpers for retrying.
+// Package retry retries Go functions that fail temporarily, waiting between
+// attempts according to a [Backoff].
 //
-// This package defines flexible interfaces for retrying Go functions that may
-// be flaky or eventually consistent. It abstracts the "backoff" (how long to
-// wait between tries) and "retry" (execute the function again) mechanisms for
-// maximum flexibility. You can define your own backoffs and middleware.
-//
-// The package is modeled after Go's built-in HTTP package, making it easy to
-// customize the built-in backoff with your own custom logic. Additionally,
-// callers specify which errors are retryable by wrapping them. This is helpful
-// with complex operations where only certain results should retry.
+// A Backoff is a function of the attempt number. Middleware such as
+// [WithMaxRetries] and [WithJitter] wraps one Backoff in another. The function
+// passed to [Do] marks the errors to retry with [RetryableError], and [Do]
+// returns any other error right away.
 package retry
 
 import (
@@ -27,7 +23,7 @@ type retryableError struct {
 	err error
 }
 
-// RetryableError marks an error as retryable.
+// RetryableError marks err as retryable. It returns nil if err is nil.
 func RetryableError(err error) error {
 	if err == nil {
 		return nil
@@ -71,7 +67,6 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 			return v, nil
 		}
 
-		// Not retryable
 		rerr, ok := errors.AsType[*retryableError](err)
 		if !ok {
 			return nilT, err
@@ -83,8 +78,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 		}
 		lastErr = rerr.Unwrap()
 
-		// Wait until next attempt or until the context expires. Any error will
-		// be caught at the top of the loop.
+		// If ctx ends during the wait, the check at the top of the loop returns.
 		if t == nil {
 			t = time.NewTimer(next)
 		} else {
@@ -98,8 +92,7 @@ func DoValue[T any](ctx context.Context, b Backoff, f RetryFuncValue[T]) (T, err
 	}
 }
 
-// Do wraps a function with a backoff to retry. The provided context is the same
-// context passed to the [RetryFunc].
+// Do is [DoValue] for a function that returns only an error.
 func Do(ctx context.Context, b Backoff, f RetryFunc) error {
 	_, err := DoValue(ctx, b, func(ctx context.Context) (*struct{}, error) {
 		return nil, f(ctx)

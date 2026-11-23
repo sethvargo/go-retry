@@ -188,11 +188,15 @@ func TestDo(t *testing.T) {
 		ctx, cancel := context.WithCancel(t.Context())
 		defer cancel()
 
+		errOops := errors.New("oops")
 		err := retry.Do(ctx, b, func(_ context.Context) error {
 			cancel()
-			return retry.RetryableError(fmt.Errorf("oops"))
+			return retry.RetryableError(errOops)
 		})
 		if got, want := err, context.Canceled; !errors.Is(got, want) {
+			t.Errorf("expected %v to be %v", got, want)
+		}
+		if got, want := err, errOops; !errors.Is(got, want) {
 			t.Errorf("expected %v to be %v", got, want)
 		}
 	})
@@ -206,11 +210,15 @@ func TestDo(t *testing.T) {
 
 			b := retry.NewConstant(20 * time.Millisecond)
 
+			errOops := errors.New("oops")
 			start := time.Now()
 			err := retry.Do(ctx, b, func(_ context.Context) error {
-				return retry.RetryableError(fmt.Errorf("oops"))
+				return retry.RetryableError(errOops)
 			})
 			if got, want := err, context.DeadlineExceeded; !errors.Is(got, want) {
+				t.Errorf("expected %v to be %v", got, want)
+			}
+			if got, want := err, errOops; !errors.Is(got, want) {
 				t.Errorf("expected %v to be %v", got, want)
 			}
 			if got, want := time.Since(start), 10*time.Millisecond; got != want {

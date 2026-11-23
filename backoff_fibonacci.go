@@ -3,14 +3,25 @@ package retry
 import (
 	"context"
 	"math"
+	"math/bits"
 	"sync/atomic"
 	"time"
 )
 
-type state [2]time.Duration
+// fibonacciNumbers holds F(1) through F(92). F(93) overflows int64, so every
+// later attempt saturates.
+var fibonacciNumbers = func() [92]uint64 {
+	var f [92]uint64
+	f[0], f[1] = 1, 1
+	for i := 2; i < len(f); i++ {
+		f[i] = f[i-1] + f[i-2]
+	}
+	return f
+}()
 
 type fibonacciBackoff struct {
-	state atomic.Pointer[state]
+	base    uint64
+	attempt atomic.Uint64
 }
 
 var _ Backoff = (*fibonacciBackoff)(nil)
@@ -34,27 +45,28 @@ func NewFibonacci(base time.Duration) Backoff {
 		panic("base must be greater than 0")
 	}
 
-	b := new(fibonacciBackoff)
-	b.state.Store(&state{base, base})
-	return b
+	return &fibonacciBackoff{
+		base: uint64(base),
+	}
 }
 
 // Next implements Backoff. It is safe for concurrent use.
 func (b *fibonacciBackoff) Next() (time.Duration, bool) {
 	for {
-		curr := b.state.Load()
-		if curr[0] == math.MaxInt64 {
+		attempt := b.attempt.Load()
+		if attempt >= uint64(len(fibonacciNumbers)) {
 			return math.MaxInt64, false
 		}
 
-		// Saturate on overflow so the sequence ends at the maximum duration.
-		next := curr[0] + curr[1]
-		if next <= 0 {
-			next = math.MaxInt64
+		// Saturate on overflow without advancing, so the sequence ends at the
+		// maximum duration.
+		hi, lo := bits.Mul64(b.base, fibonacciNumbers[attempt])
+		if hi != 0 || lo > math.MaxInt64 {
+			return math.MaxInt64, false
 		}
 
-		if b.state.CompareAndSwap(curr, &state{curr[1], next}) {
-			return curr[0], false
+		if b.attempt.CompareAndSwap(attempt, attempt+1) {
+			return time.Duration(lo), false
 		}
 	}
 }

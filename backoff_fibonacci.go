@@ -4,29 +4,19 @@ import (
 	"context"
 	"math"
 	"math/bits"
-	"sync/atomic"
 	"time"
 )
 
-type fibonacciBackoff struct {
-	base    uint64
-	attempt atomic.Uint64
-}
-
-var _ Backoff = (*fibonacciBackoff)(nil)
-
-// Fibonacci is a wrapper around [Do] that uses a Fibonacci backoff. See
-// [NewFibonacci].
+// Fibonacci calls [Do] with [NewFibonacci](base). With no retry limit, it
+// retries until f succeeds, f returns an error not marked with
+// [RetryableError], or ctx is done.
 func Fibonacci(ctx context.Context, base time.Duration, f RetryFunc) error {
 	return Do(ctx, NewFibonacci(base), f)
 }
 
-// NewFibonacci creates a new Fibonacci backoff using the starting value of
-// base. The wait time is the sum of the previous two wait times on each failed
-// attempt (1, 1, 2, 3, 5, 8, 13...).
-//
-// Once it overflows, the function constantly returns the maximum time.Duration
-// for a 64-bit integer.
+// NewFibonacci returns a backoff that waits base twice, then the sum of the
+// previous two waits on each retry (1, 1, 2, 3, 5, 8, 13...). Once the wait
+// overflows, it stays at math.MaxInt64.
 //
 // It panics if base is less than or equal to zero.
 func NewFibonacci(base time.Duration) Backoff {
@@ -34,34 +24,21 @@ func NewFibonacci(base time.Duration) Backoff {
 		panic("base must be greater than 0")
 	}
 
-	return &fibonacciBackoff{
-		base: uint64(base),
-	}
-}
-
-// Next implements Backoff. It is safe for concurrent use.
-func (b *fibonacciBackoff) Next() (time.Duration, bool) {
-	for {
-		attempt := b.attempt.Load()
+	return func(attempt uint64) (time.Duration, bool) {
 		if attempt >= uint64(len(fibonacciNumbers)) {
 			return math.MaxInt64, false
 		}
 
-		// Saturate on overflow without advancing, so the sequence ends at the
-		// maximum duration.
-		hi, lo := bits.Mul64(b.base, fibonacciNumbers[attempt])
+		hi, lo := bits.Mul64(uint64(base), fibonacciNumbers[attempt])
 		if hi != 0 || lo > math.MaxInt64 {
 			return math.MaxInt64, false
 		}
-
-		if b.attempt.CompareAndSwap(attempt, attempt+1) {
-			return time.Duration(lo), false
-		}
+		return time.Duration(lo), false
 	}
 }
 
-// fibonacciNumbers holds F(1) through F(92). F(93) overflows int64, so every
-// later attempt saturates.
+// fibonacciNumbers holds F(1) through F(92). F(93) overflows int64, so any later
+// attempt returns math.MaxInt64.
 var fibonacciNumbers = [92]uint64{
 	1,
 	1,

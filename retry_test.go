@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"testing/synctest"
 	"time"
@@ -81,7 +83,7 @@ func TestDoValue(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
-			b := retry.WithMaxRetries(5, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithMaxRetries(5, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return 1 * time.Nanosecond, false
 			}))
 
@@ -153,7 +155,7 @@ func TestDo(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.Background()
-			b := retry.WithMaxRetries(tc.maxRetries, retry.BackoffFunc(func() (time.Duration, bool) {
+			b := retry.WithMaxRetries(tc.maxRetries, retry.Backoff(func(uint64) (time.Duration, bool) {
 				return 1 * time.Nanosecond, false
 			}))
 
@@ -178,10 +180,27 @@ func TestDo(t *testing.T) {
 		})
 	}
 
+	t.Run("reused_backoff", func(t *testing.T) {
+		t.Parallel()
+
+		b := retry.WithMaxRetries(2, retry.NewConstant(1*time.Nanosecond))
+
+		for range 2 {
+			calls := 0
+			_ = retry.Do(t.Context(), b, func(_ context.Context) error {
+				calls++
+				return retry.RetryableError(errors.New("oops"))
+			})
+			if got, want := calls, 3; got != want {
+				t.Errorf("expected %d to be %d", got, want)
+			}
+		}
+	})
+
 	t.Run("context_canceled", func(t *testing.T) {
 		t.Parallel()
 
-		b := retry.BackoffFunc(func() (time.Duration, bool) {
+		b := retry.Backoff(func(uint64) (time.Duration, bool) {
 			return 5 * time.Second, false
 		})
 
@@ -253,30 +272,64 @@ func ExampleDo_simple() {
 	b := retry.NewFibonacci(1 * time.Nanosecond)
 
 	i := 0
-	if err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) error {
+	err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) error {
 		fmt.Printf("%d\n", i)
 		i++
 		return retry.RetryableError(fmt.Errorf("oops"))
-	}); err != nil {
-		// handle error
-	}
+	})
+	fmt.Println(err)
 
 	// Output:
 	// 0
 	// 1
 	// 2
 	// 3
+	// oops
+}
+
+func ExampleDo_timeout() {
+	// To limit the total time spent retrying, set a deadline on the context.
+	ctx, cancel := context.WithTimeout(context.Background(), 50*time.Millisecond)
+	defer cancel()
+
+	err := retry.Do(ctx, retry.NewConstant(10*time.Millisecond), func(_ context.Context) error {
+		return retry.RetryableError(errors.New("database is down"))
+	})
+
+	// The error wraps both the context error and the last error from f.
+	fmt.Println(errors.Is(err, context.DeadlineExceeded))
+	fmt.Println(err)
+
+	// Output:
+	// true
+	// context deadline exceeded
+	// database is down
 }
 
 func ExampleDo_customRetry() {
-	ctx := context.Background()
+	// The test server returns 503 for the first two requests and 200 after that.
+	var requests atomic.Int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if requests.Add(1) <= 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		fmt.Fprint(w, "ok")
+	}))
+	defer srv.Close()
 
-	b := retry.NewFibonacci(1 * time.Nanosecond)
+	client := &http.Client{Timeout: 5 * time.Second}
+	b := retry.WithMaxRetries(3, retry.NewConstant(1*time.Millisecond))
 
-	// This example demonstrates selectively retrying specific errors. Only errors
-	// wrapped with RetryableError are eligible to be retried.
-	if err := retry.Do(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) error {
-		resp, err := http.Get("https://google.com/")
+	// Do retries only errors wrapped with RetryableError. This function wraps
+	// errors for 5xx responses, so Do retries them, and returns 4xx errors as is.
+	err := retry.Do(context.Background(), b, func(ctx context.Context) error {
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, srv.URL, nil)
+		if err != nil {
+			return err
+		}
+
+		resp, err := client.Do(req)
 		if err != nil {
 			return err
 		}
@@ -284,41 +337,32 @@ func ExampleDo_customRetry() {
 
 		switch resp.StatusCode / 100 {
 		case 4:
-			return fmt.Errorf("bad response: %v", resp.StatusCode)
+			return fmt.Errorf("bad response: %d", resp.StatusCode)
 		case 5:
-			return retry.RetryableError(fmt.Errorf("bad response: %v", resp.StatusCode))
+			return retry.RetryableError(fmt.Errorf("bad response: %d", resp.StatusCode))
 		default:
 			return nil
 		}
-	}); err != nil {
-		// handle error
-	}
+	})
+	fmt.Println(err, requests.Load())
+
+	// Output:
+	// <nil> 3
 }
 
 func ExampleDoValue() {
-	ctx := context.Background()
+	b := retry.WithMaxRetries(3, retry.NewConstant(1*time.Millisecond))
 
-	b := retry.NewFibonacci(1 * time.Nanosecond)
-
-	body, err := retry.DoValue(ctx, retry.WithMaxRetries(3, b), func(ctx context.Context) ([]byte, error) {
-		resp, err := http.Get("https://google.com/")
-		if err != nil {
-			return nil, err
+	attempts := 0
+	val, err := retry.DoValue(context.Background(), b, func(_ context.Context) (string, error) {
+		attempts++
+		if attempts < 3 {
+			return "", retry.RetryableError(errors.New("not ready"))
 		}
-		defer resp.Body.Close()
-
-		switch resp.StatusCode / 100 {
-		case 4:
-			return nil, fmt.Errorf("bad response: %v", resp.StatusCode)
-		case 5:
-			return nil, retry.RetryableError(fmt.Errorf("bad response: %v", resp.StatusCode))
-		default:
-			b, _ := io.ReadAll(resp.Body)
-			return b, nil
-		}
+		return "ready", nil
 	})
-	if err != nil {
-		// handle error
-	}
-	_ = body
+	fmt.Println(val, err, attempts)
+
+	// Output:
+	// ready <nil> 3
 }

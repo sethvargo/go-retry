@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"math"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
 
@@ -17,14 +16,13 @@ func TestExponentialBackoff_Next(t *testing.T) {
 	t.Parallel()
 
 	overflowBase := 100_000 * time.Hour
-	concurrentExp := make([]time.Duration, 0, 100)
+	saturatedExp := make([]time.Duration, 0, 100)
 	for next := overflowBase; next > 0; next <<= 1 {
-		concurrentExp = append(concurrentExp, next)
+		saturatedExp = append(saturatedExp, next)
 	}
-	for len(concurrentExp) < 100 {
-		concurrentExp = append(concurrentExp, math.MaxInt64)
+	for len(saturatedExp) < 100 {
+		saturatedExp = append(saturatedExp, math.MaxInt64)
 	}
-	slices.Sort(concurrentExp)
 
 	cases := []struct {
 		name  string
@@ -79,10 +77,10 @@ func TestExponentialBackoff_Next(t *testing.T) {
 			},
 		},
 		{
-			name:  "concurrent_overflow",
+			name:  "stays_saturated",
 			base:  overflowBase,
 			tries: 100,
-			exp:   concurrentExp,
+			exp:   saturatedExp,
 		},
 	}
 
@@ -92,24 +90,10 @@ func TestExponentialBackoff_Next(t *testing.T) {
 
 			b := retry.NewExponential(tc.base)
 
-			resultsCh := make(chan time.Duration, tc.tries)
-			for range tc.tries {
-				go func() {
-					r, _ := b.Next()
-					resultsCh <- r
-				}()
-			}
-
 			results := make([]time.Duration, tc.tries)
 			for i := range tc.tries {
-				select {
-				case val := <-resultsCh:
-					results[i] = val
-				case <-time.After(5 * time.Second):
-					t.Fatal("timeout")
-				}
+				results[i], _ = b(uint64(i))
 			}
-			slices.Sort(results)
 
 			if !reflect.DeepEqual(results, tc.exp) {
 				t.Errorf("expected \n\n%v\n\n to be \n\n%v\n\n", results, tc.exp)
@@ -121,8 +105,8 @@ func TestExponentialBackoff_Next(t *testing.T) {
 func ExampleNewExponential() {
 	b := retry.NewExponential(1 * time.Second)
 
-	for range 5 {
-		val, _ := b.Next()
+	for i := range 5 {
+		val, _ := b(uint64(i))
 		fmt.Printf("%v\n", val)
 	}
 	// Output:

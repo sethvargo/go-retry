@@ -4,7 +4,8 @@
 
 Retry is a Go library for facilitating retry logic and backoff. It's highly
 extensible with full control over how and when retries occur. You can also write
-your own custom backoff functions by implementing the Backoff interface.
+your own custom backoff functions: a `Backoff` is a
+`func(attempt uint64) (time.Duration, bool)`.
 
 ## Features
 
@@ -15,8 +16,8 @@ your own custom backoff functions by implementing the Backoff interface.
 - **Independent** - No external dependencies besides the Go standard library,
   meaning it won't bloat your project.
 
-- **Concurrent** - Unless otherwise specified, everything is safe for concurrent
-  use.
+- **Concurrent** - Backoffs hold no state, so one backoff can be reused across
+  calls and shared between goroutines.
 
 - **Context-aware** - Use native Go contexts to control cancellation.
 
@@ -156,15 +157,20 @@ b := retry.NewFibonacci(1 * time.Second)
 b = retry.WithCappedDuration(2*time.Second, b)
 ```
 
-### WithMaxDuration
+### Total time
 
-For a best-effort limit on the total execution time, specify a max duration:
+To limit the total time spent retrying, set a deadline on the context:
 
 ```golang
-b := retry.NewFibonacci(1 * time.Second)
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
 
-// Ensure the maximum total retry time is 5s.
-b = retry.WithMaxDuration(5*time.Second, b)
+// When the deadline passes, err wraps both context.DeadlineExceeded and the
+// last error from the function.
+err := retry.Do(ctx, retry.NewFibonacci(1*time.Second), func(ctx context.Context) error {
+	// ...
+	return nil
+})
 ```
 
 ## Notes and Caveats
@@ -174,3 +180,106 @@ b = retry.WithMaxDuration(5*time.Second, b)
 - The order of middleware matters. For example, jitter added outside a cap can
   return a value above the cap: `WithJitter(j, WithCappedDuration(c, b))` can
   exceed `c`, but `WithCappedDuration(c, WithJitter(j, b))` cannot.
+
+## Upgrading from v0.6
+
+`Backoff` changed from an interface with a `Next` method to a function,
+`func(attempt uint64) (time.Duration, bool)`. `Do` passes the number of retries
+so far, starting at 0. Code that only passes the built-in backoffs and
+middleware to `Do` compiles without changes. The cases below need edits.
+
+### Calling `Next` directly
+
+```golang
+// Before
+next, stop := b.Next()
+
+// After
+next, stop := b(attempt)
+```
+
+### Custom backoffs and middleware built with `BackoffFunc`
+
+`BackoffFunc` is gone. Return a plain function instead:
+
+```golang
+// Before
+func withShift(shift time.Duration, next retry.Backoff) retry.Backoff {
+	return retry.BackoffFunc(func() (time.Duration, bool) {
+		val, stop := next.Next()
+		if stop {
+			return 0, true
+		}
+		return val + shift, false
+	})
+}
+
+// After
+func withShift(shift time.Duration, next retry.Backoff) retry.Backoff {
+	return func(attempt uint64) (time.Duration, bool) {
+		val, stop := next(attempt)
+		if stop {
+			return 0, true
+		}
+		return val + shift, false
+	}
+}
+```
+
+### Types with a `Next` method
+
+A type that implemented the old interface no longer satisfies `Backoff`. Add the
+`attempt` parameter to its `Next` method and pass the method value to `Do`:
+
+```golang
+// Before
+func (b *myBackoff) Next() (time.Duration, bool) { ... }
+
+err := retry.Do(ctx, &myBackoff{}, f)
+
+// After
+func (b *myBackoff) Next(attempt uint64) (time.Duration, bool) { ... }
+
+err := retry.Do(ctx, (&myBackoff{}).Next, f)
+```
+
+### `WithMaxDuration`
+
+`WithMaxDuration` is gone. Set a deadline on the context instead:
+
+```golang
+// Before
+b = retry.WithMaxDuration(5*time.Second, b)
+err := retry.Do(ctx, b, f)
+
+// After
+ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+defer cancel()
+err := retry.Do(ctx, b, f)
+```
+
+The returned error wraps both `context.DeadlineExceeded` and the last error from
+`f`. Unlike `WithMaxDuration`, the deadline also cancels a call to `f` that is
+still running when time runs out.
+
+### Sharing one backoff across `Do` calls
+
+Before, `Do` calls that shared one backoff also shared its retry count, so a
+shared `WithMaxRetries(100, b)` allowed 100 retries across all of those calls
+combined. Now each `Do` call counts its own retries from 0. To keep one limit
+across calls, count the retries in your own middleware:
+
+```golang
+var used atomic.Uint64
+
+withBudget := func(limit uint64, next retry.Backoff) retry.Backoff {
+	return func(attempt uint64) (time.Duration, bool) {
+		if used.Add(1) > limit {
+			return 0, true
+		}
+		return next(attempt)
+	}
+}
+
+b := withBudget(100, retry.NewExponential(1*time.Second))
+```

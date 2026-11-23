@@ -5,7 +5,6 @@ import (
 	"errors"
 	"fmt"
 	"reflect"
-	"slices"
 	"testing"
 	"time"
 
@@ -70,24 +69,10 @@ func TestNewConstant(t *testing.T) {
 
 			b := retry.NewConstant(tc.base)
 
-			resultsCh := make(chan time.Duration, tc.tries)
-			for range tc.tries {
-				go func() {
-					r, _ := b.Next()
-					resultsCh <- r
-				}()
-			}
-
 			results := make([]time.Duration, tc.tries)
 			for i := range tc.tries {
-				select {
-				case val := <-resultsCh:
-					results[i] = val
-				case <-time.After(5 * time.Second):
-					t.Fatal("timeout")
-				}
+				results[i], _ = b(uint64(i))
 			}
-			slices.Sort(results)
 
 			if !reflect.DeepEqual(results, tc.exp) {
 				t.Errorf("expected \n\n%v\n\n to be \n\n%v\n\n", results, tc.exp)
@@ -121,8 +106,8 @@ func TestNewConstant(t *testing.T) {
 func ExampleNewConstant() {
 	b := retry.NewConstant(1 * time.Second)
 
-	for range 5 {
-		val, _ := b.Next()
+	for i := range 5 {
+		val, _ := b(uint64(i))
 		fmt.Printf("%v\n", val)
 	}
 	// Output:
